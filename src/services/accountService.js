@@ -268,6 +268,7 @@ class AccountService {
     async submitBatchResults(instanceId, results) {
         try {
                 for (const result of results) {
+                    console.log('submitBatchResults =====> ', result)
                     const account = await Account.findById(result.accountId);
                     if (!account) {
                         console.warn(`Account not found: ${result.accountId}`);
@@ -486,6 +487,7 @@ class AccountService {
 }
 
 module.exports = new AccountService();
+
 
 
 
