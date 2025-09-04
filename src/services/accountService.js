@@ -154,8 +154,7 @@ class AccountService {
      */
     async saveBatch(accounts, batchInfo) {
         try {
-            return await session.withTransaction(async () => {
-                // ایجاد batch record
+                            // ایجاد batch record
                 const batch = new Batch({
                     batchId: batchInfo.batchId,
                     fileName: batchInfo.fileName,
@@ -184,12 +183,10 @@ class AccountService {
                 }));
 
                 // bulk insert اکانت‌ها
-                await Account.insertMany(accountDocs, { session });
+                await Account.insertMany(accountDocs);
 
                 console.log(`✅ ${accounts.length} اکانت در batch ${batchInfo.batchId} ذخیره شد`);
                 return batchInfo.batchId;
-            });
-
         } catch (error) {
             console.error('خطا در ذخیره batch:', error);
             throw error;
@@ -201,8 +198,7 @@ class AccountService {
      */
     async getAccountBatch(instanceId, batchSize = 2) {
         try {
-            return await session.withTransaction(async () => {
-                // پیدا کردن اکانت‌های آماده پردازش
+                            // پیدا کردن اکانت‌های آماده پردازش
                 const accounts = await Account.find({
                     status: 'pending',
                     $or: [
@@ -259,8 +255,6 @@ class AccountService {
                     originalIndex: acc.originalIndex,
                     attempts: acc.processingAttempts
                 }));
-            });
-
         } catch (error) {
             console.error('خطا در دریافت batch اکانت‌ها:', error);
             throw error;
@@ -272,9 +266,8 @@ class AccountService {
      */
     async submitBatchResults(instanceId, results) {
         try {
-            await session.withTransaction(async () => {
                 for (const result of results) {
-                    const account = await Account.findById(result.accountId).session(session);
+                    const account = await Account.findById(result.accountId);
                     if (!account) {
                         console.warn(`Account not found: ${result.accountId}`);
                         continue;
@@ -309,7 +302,6 @@ class AccountService {
                         await batch.incrementResult(this.mapStatusToResult(result.status));
                     }
                 }
-            });
 
             console.log(`✅ ${results.length} نتیجه از instance ${instanceId} ثبت شد`);
 
@@ -493,3 +485,4 @@ class AccountService {
 }
 
 module.exports = new AccountService();
+
