@@ -1,0 +1,48 @@
+{
+    "name": "sony-account-server",
+    "version": "1.0.0",
+    "description": "Sony Account Management Server with WebSocket support",
+    "main": "src/app.js",
+    "type": "commonjs",
+    "scripts": {
+        "start": "node src/app.js",
+        "dev": "nodemon src/app.js",
+        "pm2:start": "pm2 start ecosystem.config.js",
+        "pm2:stop": "pm2 stop sony-server",
+        "pm2:restart": "pm2 restart sony-server",
+        "pm2:reload": "pm2 reload sony-server",
+        "pm2:delete": "pm2 delete sony-server",
+        "pm2:logs": "pm2 logs sony-server",
+        "pm2:monit": "pm2 monit",
+        "pm2:status": "pm2 status",
+        "pm2:reset": "pm2 reset sony-server",
+        "pm2:flush": "pm2 flush",
+        "pm2:kill": "pm2 kill"
+    },
+    "dependencies": {
+        "axios": "^1.11.0",
+        "bullmq": "^4.12.7",
+        "compression": "^1.7.4",
+        "cors": "^2.8.5",
+        "csv-parser": "^3.0.0",
+        "dotenv": "^16.3.1",
+        "express": "^4.18.2",
+        "helmet": "^7.0.0",
+        "https-proxy-agent": "^7.0.6",
+        "ioredis": "^5.3.2",
+        "joi": "^17.9.2",
+        "mongoose": "^7.5.0",
+        "morgan": "^1.10.0",
+        "multer": "^1.4.5-lts.1",
+        "node-cron": "^4.2.1",
+        "socket.io": "^4.8.1",
+        "socket.io-client": "^4.8.1",
+        "uuid": "^9.0.1"
+    },
+    "devDependencies": {
+        "nodemon": "^3.0.1"
+    },
+    "engines": {
+        "node": ">=16.0.0"
+    }
+}

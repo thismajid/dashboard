@@ -1,0 +1,350 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sony Account Manager - Dashboard</title>
+    <link rel="stylesheet" href="style.css">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@300;400;500;600;700&display=swap"
+        rel="stylesheet">
+</head>
+
+<body>
+    <!-- Header -->
+    <header class="header">
+        <div class="container">
+            <div class="header-content">
+                <div class="logo">
+                    <i class="fas fa-gamepad"></i>
+                    <h1>Sony Account Manager</h1>
+                </div>
+                <div class="header-stats">
+                    <div class="connection-status" id="connection-status">
+                        <i class="fas fa-circle"></i>
+                        <span>در حال اتصال...</span>
+                    </div>
+                    <div class="last-update">
+                        آخرین به‌روزرسانی: <span id="last-update">-</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="main-content">
+        <div class="container">
+
+            <!-- Upload Section -->
+            <section class="upload-section">
+                <div class="card">
+                    <div class="card-header">
+                        <h2><i class="fas fa-upload"></i> آپلود فایل اکانت</h2>
+                    </div>
+                    <div class="card-body">
+                        <form id="upload-form" enctype="multipart/form-data">
+                            <div class="upload-area" id="upload-area">
+                                <div class="upload-icon">
+                                    <i class="fas fa-cloud-upload-alt"></i>
+                                </div>
+                                <div class="upload-text">
+                                    <p>فایل خود را اینجا بکشید یا کلیک کنید</p>
+                                    <small>فرمت‌های پشتیبانی شده: TXT, CSV, JSON (حداکثر 50MB)</small>
+                                </div>
+                                <input type="file" id="file-input" name="file" accept=".txt,.csv,.json" hidden>
+                            </div>
+                            <button type="submit" id="upload-btn" class="btn btn-primary" disabled>
+                                <i class="fas fa-upload"></i>
+                                آپلود فایل
+                            </button>
+                        </form>
+                        <div id="upload-progress" class="progress-container" style="display: none;">
+                            <div class="progress-bar">
+                                <div class="progress-fill" id="progress-fill"></div>
+                            </div>
+                            <div class="progress-text" id="progress-text">در حال آپلود...</div>
+                        </div>
+                        <div id="upload-result" class="upload-result" style="display: none;"></div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Stats Overview -->
+            <section class="stats-overview">
+                <div class="stats-grid">
+
+                    <!-- Account Stats -->
+                    <div class="stat-card">
+                        <div class="stat-icon accounts">
+                            <i class="fas fa-users"></i>
+                        </div>
+                        <div class="stat-content">
+                            <h3>اکانت‌ها</h3>
+                            <div class="stat-number" id="total-accounts">0</div>
+                            <div class="stat-details">
+                                <span>پردازش شده: <strong id="processed-accounts">0</strong></span>
+                                <span>در انتظار: <strong id="pending-count">0</strong></span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Proxy Stats -->
+                    <div class="stat-card">
+                        <div class="stat-icon proxies">
+                            <i class="fas fa-network-wired"></i>
+                        </div>
+                        <div class="stat-content">
+                            <h3>پروکسی‌ها</h3>
+                            <div class="stat-number" id="active-proxies">0</div>
+                            <div class="stat-details">
+                                <span>کل: <strong id="total-proxies">0</strong></span>
+                                <span>استفاده شده: <strong id="used-proxies">0</strong></span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Instance Stats -->
+                    <div class="stat-card">
+                        <div class="stat-icon instances">
+                            <i class="fas fa-server"></i>
+                        </div>
+                        <div class="stat-content">
+                            <h3>Instance ها</h3>
+                            <div class="stat-number" id="active-instances">0</div>
+                            <div class="stat-details">
+                                <span>فعال: <strong id="running-instances">0</strong></span>
+                                <span>متصل: <strong id="connected-instances">0</strong></span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Performance Stats -->
+                    <div class="stat-card">
+                        <div class="stat-icon performance">
+                            <i class="fas fa-tachometer-alt"></i>
+                        </div>
+                        <div class="stat-content">
+                            <h3>عملکرد</h3>
+                            <div class="stat-number" id="success-rate">0%</div>
+                            <div class="stat-details">
+                                <span>میانگین پاسخ: <strong id="avg-response-time">0ms</strong></span>
+                                <span>حافظه: <strong id="memory-usage">0 MB</strong></span>
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+            </section>
+
+            <!-- Detailed Stats -->
+            <section class="detailed-stats">
+                <div class="stats-row">
+
+                    <!-- Account Details -->
+                    <div class="card">
+                        <div class="card-header">
+                            <h3><i class="fas fa-chart-pie"></i> جزئیات اکانت‌ها</h3>
+                        </div>
+                        <div class="card-body">
+                            <div class="account-status-grid">
+                                <div class="status-item good">
+                                    <div class="status-label">موفق</div>
+                                    <div class="status-count" id="good-count">0</div>
+                                </div>
+                                <div class="status-item bad">
+                                    <div class="status-label">ناموفق</div>
+                                    <div class="status-count" id="bad-count">0</div>
+                                </div>
+                                <div class="status-item invalid">
+                                    <div class="status-label">نامعتبر</div>
+                                    <div class="status-count" id="invalid-count">0</div>
+                                </div>
+                                <div class="status-item twofa">
+                                    <div class="status-label">2FA</div>
+                                    <div class="status-count" id="twofa-count">0</div>
+                                </div>
+                                <div class="status-item passkey">
+                                    <div class="status-label">Passkey</div>
+                                    <div class="status-count" id="passkey-count">0</div>
+                                </div>
+                                <div class="status-item error">
+                                    <div class="status-label">خطا</div>
+                                    <div class="status-count" id="error-count">0</div>
+                                </div>
+                                <div class="status-item lock">
+                                    <div class="status-label">قفل شده</div>
+                                    <div class="status-count" id="lock-count">0</div>
+                                </div>
+                                <div class="status-item guard">
+                                    <div class="status-label">محافظت شده</div>
+                                    <div class="status-count" id="guard-count">0</div>
+                                </div>
+                                <div class="status-item change-pass">
+                                    <div class="status-label">تغییر رمز</div>
+                                    <div class="status-count" id="change-pass-count">0</div>
+                                </div>
+                                <div class="status-item mobile-2step">
+                                    <div class="status-label">تایید موبایل</div>
+                                    <div class="status-count" id="mobile-2step-count">0</div>
+                                </div>
+                                <div class="status-item timeout">
+                                    <div class="status-label">timeout</div>
+                                    <div class="status-count" id="timeout-count">0</div>
+                                </div>
+                                <div class="status-item server-error">
+                                    <div class="status-label">خطای سرور</div>
+                                    <div class="status-count" id="server-error-count">0</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Proxy Details -->
+                    <div class="card">
+                        <div class="card-header">
+                            <h3><i class="fas fa-network-wired"></i> وضعیت پروکسی‌ها</h3>
+                        </div>
+                        <div class="card-body">
+                            <div class="proxy-stats">
+                                <div class="proxy-stat-item">
+                                    <div class="proxy-stat-label">کل پروکسی‌ها:</div>
+                                    <div class="proxy-stat-value" id="total-proxies-detail">0</div>
+                                </div>
+                                <div class="proxy-stat-item">
+                                    <div class="proxy-stat-label">فعال:</div>
+                                    <div class="proxy-stat-value active" id="active-proxies-detail">0</div>
+                                </div>
+                                <div class="proxy-stat-item">
+                                    <div class="proxy-stat-label">استفاده شده:</div>
+                                    <div class="proxy-stat-value used" id="used-proxies-detail">0</div>
+                                </div>
+                                <div class="proxy-stat-item">
+                                    <div class="proxy-stat-label">میانگین سرعت:</div>
+                                    <div class="proxy-stat-value" id="avg-proxy-response">0ms</div>
+                                </div>
+                            </div>
+
+                            <div class="proxy-status-section">
+                                <div class="proxy-service-info">
+                                    <div class="service-status">
+                                        <span class="service-label">وضعیت سرویس:</span>
+                                        <span class="service-value" id="proxy-service-status">در حال بارگذاری...</span>
+                                    </div>
+                                    <div class="service-timing">
+                                        <div class="timing-item">
+                                            <span class="timing-label">آخرین به‌روزرسانی:</span>
+                                            <span class="timing-value" id="proxy-last-update">در حال بارگذاری...</span>
+                                        </div>
+                                        <div class="timing-item">
+                                            <span class="timing-label">به‌روزرسانی بعدی:</span>
+                                            <span class="timing-value" id="proxy-next-update">در حال بارگذاری...</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+            </section>
+
+            <!-- Instance Management -->
+            <section class="instance-management">
+                <div class="card">
+                    <div class="card-header">
+                        <h3><i class="fas fa-cogs"></i> مدیریت Instance ها</h3>
+                        <div class="header-actions">
+                            <button class="btn btn-success" id="start-all-btn">
+                                <i class="fas fa-play"></i> شروع همه
+                            </button>
+                            <button class="btn btn-warning" id="stop-all-btn">
+                                <i class="fas fa-stop"></i> توقف همه
+                            </button>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <div class="instances-container" id="instances-container">
+                            <div class="no-instances">
+                                <i class="fas fa-server"></i>
+                                <p>هیچ instance فعالی یافت نشد</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- System Info -->
+            <section class="system-info">
+                <div class="card">
+                    <div class="card-header">
+                        <h3><i class="fas fa-info-circle"></i> اطلاعات سیستم</h3>
+                    </div>
+                    <div class="card-body">
+                        <div class="system-stats-grid">
+                            <div class="system-stat">
+                                <div class="system-stat-label">مدت فعالیت:</div>
+                                <div class="system-stat-value" id="system-uptime">-</div>
+                            </div>
+                            <div class="system-stat">
+                                <div class="system-stat-label">استفاده از حافظه:</div>
+                                <div class="system-stat-value" id="memory-usage-detail">-</div>
+                            </div>
+                            <div class="system-stat">
+                                <div class="system-stat-label">نسخه Node.js:</div>
+                                <div class="system-stat-value" id="node-version">-</div>
+                            </div>
+                            <div class="system-stat">
+                                <div class="system-stat-label">محیط اجرا:</div>
+                                <div class="system-stat-value" id="environment">-</div>
+                            </div>
+                            <div class="system-stat">
+                                <div class="system-stat-label">کل Batch ها:</div>
+                                <div class="system-stat-value" id="total-batches">0</div>
+                            </div>
+                            <div class="system-stat">
+                                <div class="system-stat-label">Batch های کامل:</div>
+                                <div class="system-stat-value" id="completed-batches">0</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+        </div>
+    </main>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="container">
+            <div class="footer-content">
+                <div class="footer-info">
+                    <p>&copy; 2024 Sony Account Manager. تمامی حقوق محفوظ است.</p>
+                </div>
+                <div class="footer-stats">
+                    <span>در انتظار: <strong id="footer-pending">0</strong></span>
+                    <span>در حال پردازش: <strong id="footer-processing">0</strong></span>
+                    <span>تکمیل شده: <strong id="footer-completed">0</strong></span>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <!-- Loading Overlay -->
+    <div class="loading-overlay" id="loading-overlay">
+        <div class="loading-spinner">
+            <i class="fas fa-spinner fa-spin"></i>
+            <p>در حال بارگذاری...</p>
+        </div>
+    </div>
+
+    <!-- Notification Container -->
+    <div class="notification-container" id="notification-container"></div>
+
+    <!-- Scripts -->
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="script.js"></script>
+</body>
+
+</html>
