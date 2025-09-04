@@ -1,6 +1,7 @@
 const Account = require('../models/Account');
 const Batch = require('../models/Batch');
 const { v4: uuidv4 } = require('uuid');
+import mongoose from "mongoose";
 
 class AccountService {
     /**
@@ -269,15 +270,32 @@ class AccountService {
         try {
                 for (const result of results) {
                     console.log('submitBatchResults =====> ', result)
-                    const account = await Account.findById(result.accountId);
+                    let orFilters = [];
+                    
+                    if (result?.id && mongoose.Types.ObjectId.isValid(result.id)) {
+                        orFilters.push({ _id: result.id });
+                    }
+                    
+                    if (result?.email) {
+                        orFilters.push({ email: result.email });
+                    }
+                    
+                    let account = null;
+                    
+                    if (orFilters.length > 0) {
+                        account = await Account.findOne({
+                            $or: orFilters
+                        });
+                    }
+                    
                     if (!account) {
-                        console.warn(`Account not found: ${result.accountId}`);
-                        continue;
+                        console.warn("Account not found");
+                        continue
                     }
 
                     // به‌روزرسانی اکانت
                     await Account.findByIdAndUpdate(
-                        result.accountId,
+                        result.id,
                         {
                             $set: {
                                 status: 'completed',
@@ -487,6 +505,7 @@ class AccountService {
 }
 
 module.exports = new AccountService();
+
 
 
 
