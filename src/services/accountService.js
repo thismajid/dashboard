@@ -153,8 +153,6 @@ class AccountService {
      * ذخیره batch جدید اکانت‌ها
      */
     async saveBatch(accounts, batchInfo) {
-        const session = await Account.startSession();
-
         try {
             return await session.withTransaction(async () => {
                 // ایجاد batch record
@@ -169,7 +167,7 @@ class AccountService {
                     uploadedBy: batchInfo.uploadedBy || {}
                 });
 
-                await batch.save({ session });
+                await batch.save();
 
                 // آماده‌سازی اکانت‌ها
                 const accountDocs = accounts.map((account, index) => ({
@@ -195,8 +193,6 @@ class AccountService {
         } catch (error) {
             console.error('خطا در ذخیره batch:', error);
             throw error;
-        } finally {
-            await session.endSession();
         }
     }
 
@@ -204,8 +200,6 @@ class AccountService {
      * دریافت batch اکانت‌ها برای instance خاص
      */
     async getAccountBatch(instanceId, batchSize = 2) {
-        const session = await Account.startSession();
-
         try {
             return await session.withTransaction(async () => {
                 // پیدا کردن اکانت‌های آماده پردازش
@@ -223,7 +217,6 @@ class AccountService {
                 })
                     .sort({ createdAt: 1, processingAttempts: 1 }) // FIFO + کم‌ترین تلاش
                     .limit(batchSize)
-                    .session(session);
 
                 if (accounts.length === 0) {
                     return [];
@@ -240,8 +233,7 @@ class AccountService {
                             lockedAt: new Date()
                         },
                         $inc: { processingAttempts: 1 }
-                    },
-                    { session }
+                    }
                 );
 
                 // به‌روزرسانی وضعیت batch به processing
@@ -256,8 +248,7 @@ class AccountService {
                             status: 'processing',
                             startedAt: new Date()
                         }
-                    },
-                    { session }
+                    }
                 );
 
                 // فرمت کردن برای اسکریپت
@@ -273,8 +264,6 @@ class AccountService {
         } catch (error) {
             console.error('خطا در دریافت batch اکانت‌ها:', error);
             throw error;
-        } finally {
-            await session.endSession();
         }
     }
 
@@ -282,8 +271,6 @@ class AccountService {
      * ثبت نتایج batch اکانت‌ها
      */
     async submitBatchResults(instanceId, results) {
-        const session = await Account.startSession();
-
         try {
             await session.withTransaction(async () => {
                 for (const result of results) {
@@ -313,12 +300,11 @@ class AccountService {
                                 lockedAt: null,
                                 updatedAt: new Date()
                             }
-                        },
-                        { session }
+                        }
                     );
 
                     // به‌روزرسانی آمار batch
-                    const batch = await Batch.findOne({ batchId: account.batchId }).session(session);
+                    const batch = await Batch.findOne({ batchId: account.batchId });
                     if (batch) {
                         await batch.incrementResult(this.mapStatusToResult(result.status));
                     }
@@ -330,8 +316,6 @@ class AccountService {
         } catch (error) {
             console.error('خطا در ثبت نتایج:', error);
             throw error;
-        } finally {
-            await session.endSession();
         }
     }
 
