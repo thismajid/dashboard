@@ -250,7 +250,8 @@ class AccountService {
                 // فرمت کردن برای اسکریپت
                 return accounts.map(acc => ({
                     id: acc._id.toString(),
-                    accountLine: `${acc.email}:${acc.password}`,
+                    email: acc.email,
+                    password: acc.password,
                     batchId: acc.batchId,
                     originalIndex: acc.originalIndex,
                     attempts: acc.processingAttempts
@@ -485,5 +486,6 @@ class AccountService {
 }
 
 module.exports = new AccountService();
+
 
 
