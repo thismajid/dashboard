@@ -35,7 +35,7 @@ class ProxyWorker {
             }
 
             // تست پروکسی‌ها
-            await this.testProxies(proxies);
+            // await this.testProxies(proxies);
 
             // نمایش خلاصه نهایی
             this.showFinalSummary();
@@ -43,7 +43,7 @@ class ProxyWorker {
             // ارسال نتیجه نهایی
             parentPort.postMessage({
                 type: 'completed',
-                workingProxies: this.workingProxies,
+                workingProxies: proxies,
                 total: this.total,
                 tested: this.tested,
                 failed: this.failed
@@ -60,7 +60,7 @@ class ProxyWorker {
 
     async fetchProxiesFromAPI() {
         return new Promise((resolve, reject) => {
-            const apiUrl = `http://proxylist.space/?key=14vamdyyof&pack=2`;
+            const apiUrl = `http://proxylist.space/?key=14vamdyyof&pack=2&clean&fast`;
 
             console.log('[ProxyWorker] Fetching from API...');
 
@@ -343,4 +343,5 @@ worker.run().catch(error => {
         type: 'error',
         error: error.message
     });
+
 });
