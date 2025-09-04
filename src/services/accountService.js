@@ -299,16 +299,7 @@ class AccountService {
                         {
                             $set: {
                                 status: 'completed',
-                                checkResult: this.mapStatusToResult(result.status),
-                                resultDetails: {
-                                    message: result.message || '',
-                                    errorCode: result.errorCode || null,
-                                    responseTime: result.responseTime || 0,
-                                    checkedAt: new Date(),
-                                    instanceId: instanceId,
-                                    originalStatus: result.status,
-                                    screenshotPath: result.screenshotPath || null
-                                },
+                                result: result.status,
                                 lockedBy: null,
                                 lockedAt: null,
                                 updatedAt: new Date()
@@ -505,6 +496,7 @@ class AccountService {
 }
 
 module.exports = new AccountService();
+
 
 
 
