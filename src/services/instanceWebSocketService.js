@@ -105,7 +105,7 @@ class InstanceWebSocketService {
 
                         // آمار کلی
                         const successCount = results.filter(r =>
-                            ['good', '2fa', 'mobile_2step', 'passkey'].includes(r.status)
+                            ['good'].includes(r.status)
                         ).length;
 
                         for (let i = 0; i < successCount; i++) {
@@ -417,5 +417,6 @@ class InstanceWebSocketService {
         }
     }
 }
+
 
 module.exports = InstanceWebSocketService;
