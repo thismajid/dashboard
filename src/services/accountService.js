@@ -1,7 +1,7 @@
 const Account = require('../models/Account');
 const Batch = require('../models/Batch');
 const { v4: uuidv4 } = require('uuid');
-import mongoose from "mongoose";
+const mongoose = require('mongoose');
 
 class AccountService {
     /**
@@ -505,6 +505,7 @@ class AccountService {
 }
 
 module.exports = new AccountService();
+
 
 
 
