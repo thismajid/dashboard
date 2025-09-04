@@ -244,18 +244,15 @@ class ProxyUpdaterService extends EventEmitter {
 
             let savedCount = 0;
 
-            await session.withTransaction(async () => {
-                // حذف تمام پروکسی‌های قدیمی
-                await Proxy.deleteMany({});
-                console.log('🗑️ Cleared old proxies from database (in transaction)');
 
-                // درج پروکسی‌های جدید به‌صورت batch
-                if (newProxies.length > 0) {
-                    const savedProxies = await Proxy.insertMany(newProxies);
-                    savedCount = savedProxies.length;
-                    console.log(`✅ Inserted ${savedCount} new proxies (in transaction)`);
-                }
-            });
+            await Proxy.deleteMany({});
+
+            // درج پروکسی‌های جدید به‌صورت batch
+            if (newProxies.length > 0) {
+                const savedProxies = await Proxy.insertMany(newProxies);
+                savedCount = savedProxies.length;
+                console.log(`✅ Inserted ${savedCount} new proxies (in transaction)`);
+            }
 
             console.log(`✅ Transaction completed successfully: ${savedCount} proxies saved and sorted by speed`);
 
