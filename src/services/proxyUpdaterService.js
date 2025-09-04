@@ -242,25 +242,20 @@ class ProxyUpdaterService extends EventEmitter {
                 source: 'api'
             }));
 
-            // استفاده از تراکنش برای حذف رکوردهای قدیمی و درج رکوردهای جدید
-            const session = await mongoose.startSession();
-
             let savedCount = 0;
 
             await session.withTransaction(async () => {
                 // حذف تمام پروکسی‌های قدیمی
-                await Proxy.deleteMany({}, { session });
+                await Proxy.deleteMany({});
                 console.log('🗑️ Cleared old proxies from database (in transaction)');
 
                 // درج پروکسی‌های جدید به‌صورت batch
                 if (newProxies.length > 0) {
-                    const savedProxies = await Proxy.insertMany(newProxies, { session });
+                    const savedProxies = await Proxy.insertMany(newProxies);
                     savedCount = savedProxies.length;
                     console.log(`✅ Inserted ${savedCount} new proxies (in transaction)`);
                 }
             });
-
-            await session.endSession();
 
             console.log(`✅ Transaction completed successfully: ${savedCount} proxies saved and sorted by speed`);
 
