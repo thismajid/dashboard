@@ -323,25 +323,25 @@ class ProxyService {
     /**
     * حذف پروکسی‌های قدیمی
     */
-    async cleanupOldProxies(olderThanHours = 24) {
-        try {
-            const cutoffTime = new Date(Date.now() - (olderThanHours * 60 * 60 * 1000));
+    // async cleanupOldProxies(olderThanHours = 24) {
+    //     try {
+    //         const cutoffTime = new Date(Date.now() - (olderThanHours * 60 * 60 * 1000));
 
-            const deletedCount = await ProxyModel.deleteMany({
-                created_at: cutoffTime
-            });
+    //         const deletedCount = await ProxyModel.deleteMany({
+    //             created_at: cutoffTime
+    //         });
 
-            if (deletedCount > 0) {
-                console.log(`🗑️ Cleaned up ${deletedCount} old proxies`);
-            }
+    //         if (deletedCount > 0) {
+    //             console.log(`🗑️ Cleaned up ${deletedCount} old proxies`);
+    //         }
 
-            return deletedCount;
+    //         return deletedCount;
 
-        } catch (error) {
-            console.error('❌ Error cleaning up old proxies:', error);
-            return 0;
-        }
-    }
+    //     } catch (error) {
+    //         console.error('❌ Error cleaning up old proxies:', error);
+    //         return 0;
+    //     }
+    // }
 
     /**
     * بروزرسانی پروکسی‌ها (جایگزینی کل لیست) با تراکنش

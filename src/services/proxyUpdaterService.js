@@ -168,7 +168,7 @@ class ProxyUpdaterService extends EventEmitter {
                         console.log(`✅ Proxy fetch completed: ${message.workingProxies.length} proxies received`);
 
                         // جایگزینی پروکسی‌ها در دیتابیس
-                        const savedCount = await this.replaceProxiesInDatabase(message.workingProxies);
+                        // const savedCount = await this.replaceProxiesInDatabase(message.workingProxies);
 
                         this.stats.totalProxies = savedCount;
 
