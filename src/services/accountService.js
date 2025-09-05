@@ -53,8 +53,8 @@ class AccountService {
                 totalAccounts: accounts.length,
                 status: 'queued',
                 uploadedBy: JSON.stringify(batchInfo.uploadedBy || {}),
-                createdAt: new Date(),
-                updatedAt: new Date()
+                created_at: new Date(),
+                updated_at: new Date()
             });
 
             // آماده‌سازی اکانت‌ها
@@ -65,13 +65,12 @@ class AccountService {
                 batchId: batchInfo.batchId,
                 originalIndex: index,
                 status: 'pending',
-                processingAttempts: 0,
                 metadata: JSON.stringify({
                     originalData: account,
                     lineNumber: account.lineNumber || index + 1
                 }),
-                createdAt: new Date(),
-                updatedAt: new Date()
+                created_at: new Date(),
+                updated_at: new Date()
             }));
 
             // Bulk insert اکانت‌ها
@@ -105,12 +104,7 @@ class AccountService {
 
             const accounts = await accountModel.query()
                 .where('status', 'pending')
-                .where(function () {
-                    this.whereNull('lockedBy')
-                        .orWhere('lockedAt', '<', timeoutDate);
-                })
                 .orderBy('createdAt', 'asc')
-                .orderBy('processingAttempts', 'asc')
                 .limit(batchSize);
 
             if (accounts.length === 0) {
@@ -124,10 +118,7 @@ class AccountService {
                 .whereIn('id', accountIds)
                 .update({
                     status: 'processing',
-                    lockedBy: instanceId,
-                    lockedAt: new Date(),
-                    processingAttempts: db().raw('processing_attempts + 1'),
-                    updatedAt: new Date()
+                    updated_at: new Date()
                 });
 
             // به‌روزرسانی وضعیت batch به processing
@@ -138,19 +129,18 @@ class AccountService {
                 .update({
                     status: 'processing',
                     startedAt: new Date(),
-                    updatedAt: new Date()
+                    updated_at: new Date()
                 });
 
             await trx.commit();
 
             // فرمت کردن برای اسکریپت
             return accounts.map(acc => ({
-                id: acc.id.toString(),
+                id: acc.id,
                 email: acc.email,
                 password: acc.password,
                 batchId: acc.batchId,
                 originalIndex: acc.originalIndex,
-                attempts: acc.processingAttempts + 1
             }));
 
         } catch (error) {
@@ -177,7 +167,7 @@ class AccountService {
 
                 // جستجو بر اساس ID یا email
                 if (result?.id) {
-                    account = await accountModel.findById(result.id);
+                    account = await accountModel.findById(+result.id);
                 } else if (result?.email) {
                     account = await accountModel.findOne({ email: result.email });
                 }
@@ -188,17 +178,14 @@ class AccountService {
                 }
 
                 // به‌روزرسانی اکانت
-                await accountModel.findByIdAndUpdate(account.id, {
+                await accountModel.findByIdAndUpdate(+account.id, {
                     status: 'completed',
                     result: result.status,
-                    lockedBy: null,
-                    lockedAt: null,
-                    updatedAt: new Date()
+                    updated_at: new Date()
                 });
 
                 // به‌روزرسانی آمار batch
-                const mappedResult = this.mapStatusToResult(result.status);
-                await batchModel.incrementResult(account.batchId, mappedResult);
+                // await batchModel.incrementResult(account.batchId, mappedResult);
             }
 
             await trx.commit();
@@ -218,14 +205,11 @@ class AccountService {
         try {
             const result = await AccountModel.updateMany(
                 {
-                    lockedBy: instanceId,
                     status: 'processing'
                 },
                 {
                     status: 'pending',
-                    lockedBy: null,
-                    lockedAt: null,
-                    updatedAt: new Date()
+                    updated_at: new Date()
                 }
             );
 
@@ -250,9 +234,7 @@ class AccountService {
                 },
                 {
                     status: 'pending',
-                    lockedBy: null,
-                    lockedAt: null,
-                    updatedAt: new Date()
+                    updated_at: new Date()
                 }
             );
 
@@ -263,26 +245,6 @@ class AccountService {
             console.error('❌ خطا در آزادسازی اکانت‌ها:', error);
             throw error;
         }
-    }
-
-    /**
-    * تبدیل status اسکریپت به نتیجه دیتابیس
-    */
-    mapStatusToResult(scriptStatus) {
-        const statusMap = {
-            'good': 'good',
-            'lock': 'bad',
-            'guard': 'bad',
-            'change_pass': 'bad',
-            '2fa': '2fa',
-            'mobile_2step': '2fa',
-            'passkey': 'passkey',
-            'server_error': 'error',
-            'unknown': 'invalid',
-            'error': 'error'
-        };
-
-        return statusMap[scriptStatus] || 'invalid';
     }
 
     /**
