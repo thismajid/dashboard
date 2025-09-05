@@ -138,6 +138,30 @@ function handleStatsUpdate(data) {
     if (data.instances) updateInstanceStats(data.instances);
 }
 
+function updateProxyDetails(proxyStats) {
+    console.log('🌐 Updating proxy details:', proxyStats);
+
+    updateElement('total-proxies-detail', proxyStats.total || 0);
+    updateElement('active-proxies-detail', proxyStats.active || proxyStats.total || 0);
+    updateElement('avg-proxy-response', `${proxyStats.avgResponseTime || 0}ms`);
+    updateElement('proxy-success-rate', `${proxyStats.successRate || 100}%`);
+
+    // آپدیت زمان آخرین به‌روزرسانی
+    if (proxyStats.lastUpdate) {
+        const lastUpdate = formatDateTime(new Date(proxyStats.lastUpdate));
+        updateElement('proxy-last-update', lastUpdate);
+    } else {
+        updateElement('proxy-last-update', 'هرگز');
+    }
+
+    // آپدیت زمان به‌روزرسانی بعدی
+    if (proxyStats.nextUpdate) {
+        const nextUpdate = formatDateTime(new Date(proxyStats.nextUpdate));
+        updateElement('proxy-next-update', nextUpdate);
+    } else {
+        updateElement('proxy-next-update', 'نامشخص');
+    }
+}
 
 function updateSystemStats(system) {
     console.log('📊 Updating system stats:', system);
@@ -148,9 +172,20 @@ function updateSystemStats(system) {
     updateElement('pending-count', system.accounts?.pending || 0);
     updateElement('processing-count', system.accounts?.processing || 0);
 
-    // آمار پروکسی
-    updateElement('active-proxies', system.proxies?.active || 0);
-    updateElement('total-proxies', system.proxies?.total || 0);
+    // آمار پروکسی - فقط تعداد کل
+    updateElement('active-proxies', system.proxies?.total || 0);
+
+    // آمار عملکرد
+    updateElement('success-rate', `${system.accounts?.successRate || 0}%`);
+    updateElement('avg-response-time', `${system.proxies?.avgResponseTime || 0}ms`);
+    updateElement('memory-usage', `${system.system?.memory?.used || 0} MB`);
+
+    // آمار instance ها
+    if (system.instances) {
+        updateElement('active-instances', system.instances.active || 0);
+        updateElement('running-instances', system.instances.active || 0);
+        updateElement('connected-instances', system.instances.total || 0);
+    }
 
     // آمار batch ها
     if (system.batches) {
@@ -158,10 +193,262 @@ function updateSystemStats(system) {
         updateElement('completed-batches', system.batches.completed || 0);
     }
 
-    // آمار instance ها
-    if (system.instances) {
-        updateElement('total-instances', system.instances.total || 0);
-        updateElement('active-instances', system.instances.active || 0);
+    // آپدیت جزئیات پروکسی در بخش جداگانه
+    updateProxyDetails(system.proxies || {});
+
+    // آپدیت footer
+    updateElement('footer-pending', system.accounts?.pending || 0);
+    updateElement('footer-processing', system.accounts?.processing || 0);
+    updateElement('footer-completed', system.accounts?.completed || 0);
+
+    // آپدیت اطلاعات سیستم
+    if (system.system) {
+        updateSystemInfo(system.system);
+    }
+}
+
+
+// تابع برای آپدیت وضعیت سرویس پروکسی
+function updateProxyServiceStatus(proxyService) {
+    try {
+        console.log('🌐 Updating proxy service status:', proxyService);
+
+        if (!proxyService) {
+            console.warn('⚠️ No proxy service data');
+            return;
+        }
+
+        // آپدیت وضعیت سرویس
+        const statusElement = document.getElementById('proxy-service-status');
+        if (statusElement) {
+            if (proxyService.isRunning) {
+                statusElement.innerHTML = '<span class="badge badge-success"><i class="fas fa-check-circle"></i> فعال</span>';
+            } else {
+                statusElement.innerHTML = '<span class="badge badge-danger"><i class="fas fa-times-circle"></i> غیرفعال</span>';
+            }
+        }
+
+        // آپدیت زمان‌ها
+        if (proxyService.lastUpdate) {
+            const lastUpdateTime = formatDateTime(new Date(proxyService.lastUpdate));
+            updateElement('proxy-last-update', lastUpdateTime);
+        }
+
+        if (proxyService.nextUpdate) {
+            const nextUpdateTime = formatDateTime(new Date(proxyService.nextUpdate));
+            updateElement('proxy-next-update', nextUpdateTime);
+        }
+
+        // آپدیت وضعیت آپدیت
+        const updateStatusElement = document.getElementById('proxy-update-status');
+        if (updateStatusElement && proxyService.status) {
+            switch (proxyService.status) {
+                case 'updating':
+                    updateStatusElement.innerHTML = '<span class="badge badge-warning"><i class="fas fa-spinner fa-spin"></i> در حال به‌روزرسانی</span>';
+                    break;
+                case 'success':
+                    updateStatusElement.innerHTML = '<span class="badge badge-success"><i class="fas fa-check"></i> موفق</span>';
+                    break;
+                case 'error':
+                    updateStatusElement.innerHTML = '<span class="badge badge-danger"><i class="fas fa-exclamation-triangle"></i> خطا</span>';
+                    break;
+                default:
+                    updateStatusElement.innerHTML = '<span class="badge badge-info"><i class="fas fa-info-circle"></i> آماده</span>';
+            }
+        }
+
+    } catch (error) {
+        console.error('❌ Error updating proxy service status:', error);
+    }
+}
+
+// تابع برای آپدیت وضعیت سرویس پروکسی
+function updateProxyServiceStatus(proxyService) {
+    try {
+        console.log('🌐 Updating proxy service status:', proxyService);
+
+        if (!proxyService) {
+            console.warn('⚠️ No proxy service data');
+            return;
+        }
+
+        // آپدیت وضعیت سرویس
+        const statusElement = document.getElementById('proxy-service-status');
+        if (statusElement) {
+            if (proxyService.isRunning) {
+                statusElement.innerHTML = '<span class="badge badge-success"><i class="fas fa-check-circle"></i> فعال</span>';
+            } else {
+                statusElement.innerHTML = '<span class="badge badge-danger"><i class="fas fa-times-circle"></i> غیرفعال</span>';
+            }
+        }
+
+        // آپدیت زمان‌ها
+        if (proxyService.lastUpdate) {
+            const lastUpdateTime = formatDateTime(new Date(proxyService.lastUpdate));
+            updateElement('proxy-last-update', lastUpdateTime);
+        }
+
+        if (proxyService.nextUpdate) {
+            const nextUpdateTime = formatDateTime(new Date(proxyService.nextUpdate));
+            updateElement('proxy-next-update', nextUpdateTime);
+        }
+
+        // آپدیت وضعیت آپدیت
+        const updateStatusElement = document.getElementById('proxy-update-status');
+        if (updateStatusElement && proxyService.status) {
+            switch (proxyService.status) {
+                case 'updating':
+                    updateStatusElement.innerHTML = '<span class="badge badge-warning"><i class="fas fa-spinner fa-spin"></i> در حال به‌روزرسانی</span>';
+                    break;
+                case 'success':
+                    updateStatusElement.innerHTML = '<span class="badge badge-success"><i class="fas fa-check"></i> موفق</span>';
+                    break;
+                case 'error':
+                    updateStatusElement.innerHTML = '<span class="badge badge-danger"><i class="fas fa-exclamation-triangle"></i> خطا</span>';
+                    break;
+                default:
+                    updateStatusElement.innerHTML = '<span class="badge badge-info"><i class="fas fa-info-circle"></i> آماده</span>';
+            }
+        }
+
+    } catch (error) {
+        console.error('❌ Error updating proxy service status:', error);
+    }
+}
+
+// تابع برای آپدیت اطلاعات سیستم
+function updateSystemInfo(systemInfo) {
+    try {
+        console.log('💻 Updating system info:', systemInfo);
+
+        if (systemInfo.uptime) {
+            updateElement('system-uptime', formatUptime(systemInfo.uptime));
+        }
+
+        if (systemInfo.memory) {
+            const memoryText = `${systemInfo.memory.used}/${systemInfo.memory.total} MB (${systemInfo.memory.usage}%)`;
+            updateElement('memory-usage-detail', memoryText);
+        }
+
+        if (systemInfo.nodeVersion) {
+            updateElement('node-version', systemInfo.nodeVersion);
+        }
+
+        if (systemInfo.environment) {
+            updateElement('environment', systemInfo.environment);
+        }
+
+    } catch (error) {
+        console.error('❌ Error updating system info:', error);
+    }
+}
+
+// تابع برای فرمت کردن uptime
+function formatUptime(seconds) {
+    const days = Math.floor(seconds / 86400);
+    const hours = Math.floor((seconds % 86400) / 3600);
+    const minutes = Math.floor((seconds % 3600) / 60);
+
+    if (days > 0) {
+        return `${days} روز، ${hours} ساعت`;
+    } else if (hours > 0) {
+        return `${hours} ساعت، ${minutes} دقیقه`;
+    } else {
+        return `${minutes} دقیقه`;
+    }
+}
+
+// اضافه کردن event listener برای دکمه به‌روزرسانی پروکسی
+function initializeEventListeners() {
+    // Refresh button
+    const refreshBtn = document.querySelector('.refresh-btn');
+    if (refreshBtn) {
+        refreshBtn.addEventListener('click', () => {
+            console.log('🔄 Refresh button clicked');
+            requestStats();
+        });
+    }
+
+    // دکمه به‌روزرسانی پروکسی
+    const updateProxiesBtn = document.getElementById('update-proxies-btn');
+    if (updateProxiesBtn) {
+        updateProxiesBtn.addEventListener('click', async () => {
+            console.log('🔄 Update proxies button clicked');
+
+            updateProxiesBtn.disabled = true;
+            updateProxiesBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> در حال به‌روزرسانی...';
+
+            try {
+                if (socket && socket.connected) {
+                    socket.emit('update-proxies');
+                } else {
+                    // استفاده از API
+                    const response = await fetch('/api/proxies/update', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        }
+                    });
+
+                    const result = await response.json();
+
+                    if (result.success) {
+                        showNotification('به‌روزرسانی پروکسی‌ها آغاز شد', 'success');
+                    } else {
+                        throw new Error(result.message);
+                    }
+                }
+            } catch (error) {
+                console.error('❌ Error updating proxies:', error);
+                showNotification(`خطا در به‌روزرسانی: ${error.message}`, 'error');
+            } finally {
+                updateProxiesBtn.disabled = false;
+                updateProxiesBtn.innerHTML = '<i class="fas fa-sync-alt"></i> به‌روزرسانی';
+            }
+        });
+    }
+
+    // Upload functionality
+    initializeUpload();
+
+    // Instance controls
+    initializeInstanceControls();
+}
+
+// Handle proxy update status
+function handleProxyUpdateStatus(data) {
+    try {
+        console.log('🌐 Proxy update status:', data);
+
+        const statusBadge = document.getElementById('proxy-update-status');
+        if (statusBadge) {
+            switch (data.status) {
+                case 'updating':
+                    statusBadge.innerHTML = '<span class="badge badge-warning"><i class="fas fa-spinner fa-spin"></i> در حال به‌روزرسانی...</span>';
+                    break;
+                case 'success':
+                    statusBadge.innerHTML = '<span class="badge badge-success"><i class="fas fa-check"></i> به‌روزرسانی شد</span>';
+                    if (data.stats) {
+                        showNotification(`${data.stats.active || data.stats.total} پروکسی بارگذاری شد`, 'success');
+                    }
+                    break;
+                case 'error':
+                    statusBadge.innerHTML = '<span class="badge badge-danger"><i class="fas fa-exclamation-triangle"></i> خطا در به‌روزرسانی</span>';
+                    showNotification(data.message || 'خطا در به‌روزرسانی پروکسی‌ها', 'error');
+                    break;
+            }
+        }
+
+        // آپدیت آمار اگر ارائه شده باشد
+        if (data.stats) {
+            updateElement('total-proxies', data.stats.total || 0);
+            updateElement('active-proxies', data.stats.active || 0);
+            updateElement('total-proxies-detail', data.stats.total || 0);
+            updateElement('active-proxies-detail', data.stats.active || 0);
+        }
+
+    } catch (error) {
+        console.error('❌ Error handling proxy update status:', error);
     }
 }
 

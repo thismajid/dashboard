@@ -98,10 +98,6 @@
                         <div class="stat-content">
                             <h3>پروکسی‌ها</h3>
                             <div class="stat-number" id="active-proxies">0</div>
-                            <div class="stat-details">
-                                <span>کل: <strong id="total-proxies">0</strong></span>
-                                <span>استفاده شده: <strong id="used-proxies">0</strong></span>
-                            </div>
                         </div>
                     </div>
 
@@ -201,9 +197,15 @@
                         </div>
                     </div>
                     <!-- Proxy Details -->
+                    <!-- Proxy Details -->
                     <div class="card">
                         <div class="card-header">
                             <h3><i class="fas fa-network-wired"></i> وضعیت پروکسی‌ها</h3>
+                            <div class="header-actions">
+                                <button class="btn btn-primary btn-sm" id="update-proxies-btn">
+                                    <i class="fas fa-sync-alt"></i> به‌روزرسانی
+                                </button>
+                            </div>
                         </div>
                         <div class="card-body">
                             <div class="proxy-stats">
@@ -216,12 +218,12 @@
                                     <div class="proxy-stat-value active" id="active-proxies-detail">0</div>
                                 </div>
                                 <div class="proxy-stat-item">
-                                    <div class="proxy-stat-label">استفاده شده:</div>
-                                    <div class="proxy-stat-value used" id="used-proxies-detail">0</div>
-                                </div>
-                                <div class="proxy-stat-item">
                                     <div class="proxy-stat-label">میانگین سرعت:</div>
                                     <div class="proxy-stat-value" id="avg-proxy-response">0ms</div>
+                                </div>
+                                <div class="proxy-stat-item">
+                                    <div class="proxy-stat-label">نرخ موفقیت:</div>
+                                    <div class="proxy-stat-value" id="proxy-success-rate">0%</div>
                                 </div>
                             </div>
 
@@ -229,7 +231,9 @@
                                 <div class="proxy-service-info">
                                     <div class="service-status">
                                         <span class="service-label">وضعیت سرویس:</span>
-                                        <span class="service-value" id="proxy-service-status">در حال بارگذاری...</span>
+                                        <span class="service-value" id="proxy-service-status">
+                                            <span class="badge badge-secondary">در حال بارگذاری...</span>
+                                        </span>
                                     </div>
                                     <div class="service-timing">
                                         <div class="timing-item">
@@ -240,6 +244,12 @@
                                             <span class="timing-label">به‌روزرسانی بعدی:</span>
                                             <span class="timing-value" id="proxy-next-update">در حال بارگذاری...</span>
                                         </div>
+                                    </div>
+                                    <div class="update-status">
+                                        <span class="update-label">وضعیت آپدیت:</span>
+                                        <span class="update-value" id="proxy-update-status">
+                                            <span class="badge badge-info">آماده</span>
+                                        </span>
                                     </div>
                                 </div>
                             </div>
