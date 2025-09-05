@@ -29,7 +29,7 @@ class ProxyService {
             console.log(`🌐 Proxy assigned to ${instanceId}: ${proxy.host}:${proxy.port}`);
 
             return {
-                id: proxy.id.toString(),
+                id: proxy.id,
                 host: proxy.host,
                 port: proxy.port,
                 username: proxy.username,
@@ -288,11 +288,10 @@ class ProxyService {
         try {
             const proxyModel = ProxyModel.withTransaction(trx);
 
-            // حذف تمام پروکسی‌های موجود
-            await proxyModel.query().del();
-
-            // اگر پروکسی جدید وجود داشته باشد، اضافه کن
             if (newProxies && newProxies.length > 0) {
+                // حذف تمام پروکسی‌های موجود
+                await proxyModel.query().del();
+
                 const proxyRows = newProxies.map(proxy => ({
                     host: proxy.host,
                     port: proxy.port,
