@@ -217,7 +217,7 @@ class AccountService {
             return result.length;
 
         } catch (error) {
-            console.error('❌ خطا در آزادسازی اکانت‌ها:', error);
+            console.error('❌ خطا در آزادسازی اکانت‌ها: - releaseLockedAccounts', error);
             throw error;
         }
     }
@@ -242,9 +242,9 @@ class AccountService {
             return result.length;
 
         } catch (error) {
-            console.error('❌ خطا در آزادسازی اکانت‌ها:', error);
+            console.error('❌ خطا در آزادسازی اکانت‌ها: - releaseAccountsByIds', error);
             throw error;
-        }
+         }
     }
 
     /**
