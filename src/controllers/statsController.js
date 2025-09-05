@@ -107,7 +107,7 @@ class StatsController {
                     .groupBy('result')
                     .whereNotNull('result'),
                 AccountModel.query()
-                    .where('createdAt', '>', AccountModel.db().raw("NOW() - INTERVAL '24 hours'"))
+                    .where('created_at', '>', AccountModel.db().raw("NOW() - INTERVAL '24 hours'"))
                     .count('* as count')
                     .first()
             ]);
@@ -201,7 +201,7 @@ class StatsController {
                     .where('responseTime', '>', 0)
                     .avg('responseTime as avg')
                     .first(),
-                ProxyModel.query().orderBy('createdAt', 'desc').first(),
+                ProxyModel.query().orderBy('created_at', 'desc').first(),
                 ProxyModel.query()
                     .sum('usageCount as totalUsage')
                     .avg('usageCount as avgUsage')
@@ -220,7 +220,7 @@ class StatsController {
                 inactive: total - active,
                 avgResponseTime: avgResponseTime,
                 successRate: total > 0 ? Math.round((active / total) * 100) : 100,
-                lastUpdate: lastUpdateResult?.createdAt || null,
+                lastUpdate: lastUpdateResult?.created_at || null,
                 nextUpdate: null, // باید از ProxyUpdaterService بگیریم
                 totalUsage: parseInt(usageStats?.totalUsage) || 0,
                 avgUsage: usageStats?.avgUsage ? Math.round(usageStats.avgUsage) : 0
@@ -264,7 +264,7 @@ class StatsController {
                         .count('* as count')
                         .groupBy('status'),
                     AccountModel.db()('Batches')
-                        .where('createdAt', '>', AccountModel.db().raw("NOW() - INTERVAL '24 hours'"))
+                        .where('created_at', '>', AccountModel.db().raw("NOW() - INTERVAL '24 hours'"))
                         .count('* as count')
                         .first(),
                     AccountModel.db()('Batches')
@@ -298,7 +298,7 @@ class StatsController {
                     AccountModel.query()
                         .countDistinct('batchId as count')
                         .whereNotNull('batchId')
-                        .where('createdAt', '>', AccountModel.db().raw("NOW() - INTERVAL '24 hours'"))
+                        .where('created_at', '>', AccountModel.db().raw("NOW() - INTERVAL '24 hours'"))
                         .first()
                 ]);
 

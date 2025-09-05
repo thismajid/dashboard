@@ -449,8 +449,8 @@ class UploadController {
             // دریافت اکانت‌های batch
             const accounts = await AccountModel.query()
                 .where('batchId', batchId)
-                .select('id', 'email', 'status', 'result', 'createdAt', 'updatedAt', 'checkedAt')
-                .orderBy('createdAt', 'desc')
+                .select('id', 'email', 'status', 'result', 'created_at', 'updated_at', 'checkedAt')
+                .orderBy('created_at', 'desc')
                 .limit(limit)
                 .offset(offset);
 

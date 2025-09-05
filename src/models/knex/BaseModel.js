@@ -125,7 +125,7 @@ class BaseModel {
         Object.keys(conditions).forEach(key => {
             if (conditions[key] !== undefined) {
                 if (typeof conditions[key] === 'object' && conditions[key] !== null) {
-                    // پشتیبانی از operators مثل { createdAt: { '<': date } }
+                    // پشتیبانی از operators مثل { created_at: { '<': date } }
                     Object.keys(conditions[key]).forEach(operator => {
                         switch (operator) {
                             case '<':

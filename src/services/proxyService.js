@@ -16,9 +16,7 @@ class ProxyService {
                 { status: 'active' },
                 {
                     sort: {
-                        usageCount: 1, // کم‌استفاده‌ترین
-                        responseTime: 1, // سریع‌ترین
-                        createdAt: 1 // قدیمی‌ترین
+                        created_at: 1 // قدیمی‌ترین
                     }
                 }
             );
@@ -118,9 +116,9 @@ class ProxyService {
         try {
             const proxies = await ProxyModel.query()
                 .where('status', 'active')
-                .select('id', 'host', 'port', 'protocol', 'responseTime', 'createdAt', 'usageCount')
+                .select('id', 'host', 'port', 'protocol', 'responseTime', 'created_at')
                 .orderBy('responseTime', 'asc')
-                .orderBy('createdAt', 'asc')
+                .orderBy('created_at', 'asc')
                 .limit(limit);
 
             return proxies.map(proxy => ({
@@ -129,7 +127,7 @@ class ProxyService {
                 port: proxy.port,
                 protocol: proxy.protocol || 'http',
                 responseTime: proxy.responseTime || 0,
-                createdAt: proxy.createdAt,
+                created_at: proxy.created_at,
                 usageCount: proxy.usageCount || 0,
                 status: 'active'
             }));
@@ -148,7 +146,7 @@ class ProxyService {
             const cutoffTime = new Date(Date.now() - (olderThanHours * 60 * 60 * 1000));
 
             const deletedCount = await ProxyModel.deleteMany({
-                createdAt: cutoffTime // کمتر از زمان مشخص شده
+                created_at: cutoffTime // کمتر از زمان مشخص شده
             });
 
             if (deletedCount > 0) {
@@ -305,8 +303,8 @@ class ProxyService {
                     responseTime: proxy.responseTime || null,
                     source: proxy.source || 'api',
                     usageCount: proxy.usageCount || 0,
-                    createdAt: new Date(),
-                    updatedAt: new Date()
+                    created_at: new Date(),
+                    updated_at: new Date()
                 }));
 
                 await proxyModel.insertMany(proxyRows);

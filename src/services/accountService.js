@@ -104,7 +104,7 @@ class AccountService {
 
             const accounts = await accountModel.query()
                 .where('status', 'pending')
-                .orderBy('createdAt', 'asc')
+                .orderBy('created_at', 'asc')
                 .limit(batchSize);
 
             if (accounts.length === 0) {
@@ -255,7 +255,7 @@ class AccountService {
             const cutoffDate = new Date(Date.now() - (daysOld * 24 * 60 * 60 * 1000));
 
             const result = await AccountModel.deleteMany({
-                createdAt: { '<': cutoffDate },
+                created_at: { '<': cutoffDate },
                 status: 'completed'
             });
 

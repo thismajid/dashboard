@@ -291,7 +291,7 @@ router.get('/accounts', async (req, res) => {
         const accounts = await Account.find(query)
             .limit(parseInt(limit))
             .skip(parseInt(skip))
-            .sort({ createdAt: -1 });
+            .sort({ created_at: -1 });
 
         const total = await Account.countDocuments(query);
 
@@ -321,7 +321,7 @@ router.get('/next-account', async (req, res) => {
             },
             {
                 new: true,
-                sort: { createdAt: 1 }
+                sort: { created_at: 1 }
             }
         );
 
@@ -355,7 +355,7 @@ router.patch('/accounts/:id', async (req, res) => {
     try {
         const { status, result, error } = req.body;
 
-        const updateData = { updatedAt: new Date() };
+        const updateData = { updated_at: new Date() };
         if (status) updateData.status = status;
         if (result) updateData.result = result;
         if (error) updateData.error = error;

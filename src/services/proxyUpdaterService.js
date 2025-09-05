@@ -449,7 +449,7 @@ class ProxyUpdaterService extends EventEmitter {
         try {
             const updateData = {
                 lastUsedAt: new Date(),
-                updatedAt: new Date()
+                updated_at: new Date()
             };
 
             if (success) {
@@ -514,7 +514,7 @@ class ProxyUpdaterService extends EventEmitter {
             const cutoffTime = new Date(Date.now() - (olderThanHours * 60 * 60 * 1000));
 
             const deletedCount = await ProxyModel.deleteMany({
-                createdAt: { '<': cutoffTime },
+                created_at: { '<': cutoffTime },
                 status: 'inactive'
             });
 
