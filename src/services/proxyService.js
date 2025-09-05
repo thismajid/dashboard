@@ -353,27 +353,34 @@ class ProxyService {
             // شروع به‌روزرسانی
             await this.startProxyUpdate();
 
+            // 🛡️ CRITICAL SAFETY CHECK: Never allow empty proxy table!
+            if (!newProxies || newProxies.length === 0) {
+                console.error('🚨 SAFETY ABORT: Cannot update proxies with empty list - would leave table empty!');
+                await trx.rollback();
+                await this.finishProxyUpdate(false);
+                throw new Error('Cannot update proxies: no new proxies provided (safety check)');
+            }
+
             const proxyModel = ProxyModel.withTransaction(trx);
 
-            if (newProxies && newProxies.length > 0) {
-                // حذف تمام پروکسی‌های موجود
-                await proxyModel.query().del();
+            // حذف تمام پروکسی‌های موجود (only after confirming we have replacements)
+            console.log(`🗑️ Deleting all existing proxies (${newProxies.length} replacements ready)...`);
+            await proxyModel.query().del();
 
-                const proxyRows = newProxies.map(proxy => ({
-                    host: proxy.host,
-                    port: proxy.port,
-                    username: proxy.username || null,
-                    password: proxy.password || null,
-                    protocol: proxy.protocol || 'http',
-                    status: proxy.status || 'active',
-                    responseTime: proxy.responseTime || null,
-                    source: proxy.source || 'api',
-                    created_at: new Date(),
-                    updated_at: new Date()
-                }));
+            const proxyRows = newProxies.map(proxy => ({
+                host: proxy.host,
+                port: proxy.port,
+                username: proxy.username || null,
+                password: proxy.password || null,
+                protocol: proxy.protocol || 'http',
+                status: proxy.status || 'active',
+                responseTime: proxy.responseTime || null,
+                source: proxy.source || 'api',
+                created_at: new Date(),
+                updated_at: new Date()
+            }));
 
-                await proxyModel.insertMany(proxyRows);
-            }
+            await proxyModel.insertMany(proxyRows);
 
             await trx.commit();
             console.log(`✅ ${newProxies?.length || 0} پروکسی بروزرسانی شد`);

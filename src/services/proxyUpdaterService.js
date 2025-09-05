@@ -168,7 +168,7 @@ class ProxyUpdaterService extends EventEmitter {
                         console.log(`✅ Proxy fetch completed: ${message.workingProxies.length} proxies received`);
 
                         // جایگزینی پروکسی‌ها در دیتابیس
-                        // const savedCount = await this.replaceProxiesInDatabase(message.workingProxies);
+                        const savedCount = await this.replaceProxiesInDatabase(message.workingProxies);
 
                         this.stats.totalProxies = savedCount;
 
@@ -219,18 +219,21 @@ class ProxyUpdaterService extends EventEmitter {
         const trx = await db().transaction();
 
         try {
-            console.log(`💾 Replacing all proxies with ${newProxies.length} new ones...`);
+            console.log(`💾 Attempting to replace proxies with ${newProxies.length} new ones...`);
 
-            // مرحله 1: حذف تمام پروکسی‌های موجود
-            console.log(`🗑️ Deleting all existing proxies...`);
+            // 🛡️ CRITICAL SAFETY CHECK: Never allow empty proxy table!
+            if (!newProxies || newProxies.length === 0) {
+                console.error('🚨 SAFETY ABORT: Cannot replace proxies with empty list - would leave table empty!');
+                await trx.rollback();
+                throw new Error('Cannot replace proxies: no new proxies provided (safety check)');
+            }
+
+            // مرحله 1: حذف تمام پروکسی‌های موجود (only after confirming we have replacements)
+            console.log(`🗑️ Deleting all existing proxies (${newProxies.length} replacements ready)...`);
             const deletedCount = await trx('Proxies').del();
             console.log(`🗑️ Deleted ${deletedCount} existing proxies`);
 
-            if (newProxies.length === 0) {
-                console.warn('⚠️ No new proxies to insert');
-                await trx.commit();
-                return 0;
-            }
+            // Continue with the existing logic since we know we have new proxies
 
             // آماده‌سازی داده‌های جدید
             const proxyRows = newProxies.map(proxy => ({
