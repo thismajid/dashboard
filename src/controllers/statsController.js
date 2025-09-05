@@ -191,24 +191,17 @@ class StatsController {
             // اگر proxyService آمار نداد، مستقیماً از دیتابیس بگیر
             const [
                 totalResult,
-                activeResult,
                 avgResponseTimeResult,
                 lastUpdateResult,
-                usageStats
             ] = await Promise.all([
                 ProxyModel.query().count('* as count').first(),
-                ProxyModel.query().where('status', 'active').count('* as count').first(),
                 ProxyModel.query()
                     .where('status', 'active')
                     .whereNotNull('responseTime')
                     .where('responseTime', '>', 0)
                     .avg('responseTime as avg')
                     .first(),
-                ProxyModel.query().orderBy('updatedAt', 'desc').first(),
-                ProxyModel.query()
-                    .sum('usageCount as totalUsage')
-                    .avg('usageCount as avgUsage')
-                    .first()
+                ProxyModel.query().orderBy('updated_at', 'desc').first(),
             ]);
 
             const total = parseInt(totalResult?.count) || 0;
@@ -218,14 +211,10 @@ class StatsController {
 
             const stats = {
                 total: total,
-                active: active,
-                available: active, // پروکسی‌های قابل استفاده
-                inactive: total - active,
                 avgResponseTime: avgResponseTime,
                 successRate: total > 0 ? Math.round((active / total) * 100) : 100,
-                lastUpdate: lastUpdateResult?.updatedAt || lastUpdateResult?.createdAt || null,
+                lastUpdate: lastUpdateResult?.updated_at || lastUpdateResult?.created_at || null,
                 nextUpdate: serviceInfo?.nextUpdate || null,
-                totalUsage: parseInt(usageStats?.totalUsage) || 0,
                 avgUsage: usageStats?.avgUsage ? Math.round(usageStats.avgUsage) : 0,
 
                 // اطلاعات سرویس

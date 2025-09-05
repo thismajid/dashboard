@@ -128,7 +128,6 @@ class ProxyService {
                 protocol: proxy.protocol || 'http',
                 responseTime: proxy.responseTime || 0,
                 created_at: proxy.created_at,
-                usageCount: proxy.usageCount || 0,
                 status: 'active'
             }));
 
@@ -254,8 +253,7 @@ class ProxyService {
         try {
             const proxy = await ProxyModel.query()
                 .where('status', 'active')
-                .orderBy('usageCount', 'asc')
-                .orderBy('responseTime', 'asc')
+                .orderBy('created_at', 'asc')
                 .first();
 
             if (!proxy) {
@@ -301,7 +299,6 @@ class ProxyService {
                     status: proxy.status || 'active',
                     responseTime: proxy.responseTime || null,
                     source: proxy.source || 'api',
-                    usageCount: proxy.usageCount || 0,
                     created_at: new Date(),
                     updated_at: new Date()
                 }));
