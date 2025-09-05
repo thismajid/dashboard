@@ -149,9 +149,7 @@ function updateProxyDetails(proxyStats) {
     console.log('🌐 Updating proxy details:', proxyStats);
 
     updateElement('total-proxies-detail', proxyStats.total || 0);
-    updateElement('active-proxies-detail', proxyStats.active || 0);
     updateElement('avg-proxy-response', `${proxyStats.avgResponseTime || 0}ms`);
-    updateElement('proxy-success-rate', `${proxyStats.successRate || 0}%`);
 
     // آپدیت وضعیت سرویس
     const serviceStatusElement = document.getElementById('proxy-service-status');
@@ -1144,7 +1142,7 @@ function handleProxyUpdateStatus(data) {
         // Update stats if provided
         if (data.stats) {
             updateElement('total-proxies', data.stats.total || 0);
-            updateElement('active-proxies', data.stats.active || 0);
+            updateElement('total-proxies-detail', data.stats.total || 0);
         }
 
     } catch (error) {
