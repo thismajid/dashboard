@@ -327,6 +327,41 @@ class ProxyService {
         console.log(`⚠️ releaseAccountsByIds called in proxyService - should be in accountService`);
         return true;
     }
+
+    async getServiceInfo() {
+        try {
+            // اگر از Redis استفاده می‌کنی
+            const serviceInfo = await this.redis.hgetall('proxy:service:info');
+
+            return {
+                isRunning: serviceInfo.isRunning === 'true',
+                lastUpdate: serviceInfo.lastUpdate ? new Date(serviceInfo.lastUpdate) : null,
+                nextUpdate: serviceInfo.nextUpdate ? new Date(serviceInfo.nextUpdate) : null,
+                status: serviceInfo.status || 'idle'
+            };
+        } catch (error) {
+            console.error('❌ Error getting service info:', error);
+            return {
+                isRunning: false,
+                lastUpdate: null,
+                nextUpdate: null,
+                status: 'error'
+            };
+        }
+    }
+
+    async updateServiceInfo(info) {
+        try {
+            await this.redis.hmset('proxy:service:info', {
+                isRunning: info.isRunning.toString(),
+                lastUpdate: info.lastUpdate ? info.lastUpdate.toISOString() : '',
+                nextUpdate: info.nextUpdate ? info.nextUpdate.toISOString() : '',
+                status: info.status || 'idle'
+            });
+        } catch (error) {
+            console.error('❌ Error updating service info:', error);
+        }
+    }
 }
 
 module.exports = new ProxyService();

@@ -132,37 +132,72 @@ function handleStatsUpdate(data) {
 
     if (data.system) {
         updateSystemStats(data.system);
-        updateAccountDetails(data.system.accounts); // اضافه کردن این خط
+        updateAccountDetails(data.system.accounts);
     }
-    if (data.proxyService) updateProxyServiceStatus(data.proxyService);
-    if (data.instances) updateInstanceStats(data.instances);
+
+    // آپدیت مستقیم پروکسی سرویس
+    if (data.proxyService) {
+        updateProxyServiceStatus(data.proxyService);
+    }
+
+    if (data.instances) {
+        updateInstanceStats(data.instances);
+    }
 }
 
 function updateProxyDetails(proxyStats) {
     console.log('🌐 Updating proxy details:', proxyStats);
 
     updateElement('total-proxies-detail', proxyStats.total || 0);
-    updateElement('active-proxies-detail', proxyStats.active || proxyStats.total || 0);
+    updateElement('active-proxies-detail', proxyStats.active || 0);
     updateElement('avg-proxy-response', `${proxyStats.avgResponseTime || 0}ms`);
-    updateElement('proxy-success-rate', `${proxyStats.successRate || 100}%`);
+    updateElement('proxy-success-rate', `${proxyStats.successRate || 0}%`);
+
+    // آپدیت وضعیت سرویس
+    const serviceStatusElement = document.getElementById('proxy-service-status');
+    if (serviceStatusElement) {
+        if (proxyStats.serviceStatus) {
+            serviceStatusElement.innerHTML = '<span class="badge badge-success"><i class="fas fa-check-circle"></i> فعال</span>';
+        } else {
+            serviceStatusElement.innerHTML = '<span class="badge badge-danger"><i class="fas fa-times-circle"></i> غیرفعال</span>';
+        }
+    }
 
     // آپدیت زمان آخرین به‌روزرسانی
-    if (proxyStats.lastUpdate) {
-        const lastUpdate = formatDateTime(new Date(proxyStats.lastUpdate));
+    if (proxyStats.lastUpdate || proxyStats.serviceLastUpdate) {
+        const lastUpdate = formatDateTime(new Date(proxyStats.serviceLastUpdate || proxyStats.lastUpdate));
         updateElement('proxy-last-update', lastUpdate);
     } else {
         updateElement('proxy-last-update', 'هرگز');
     }
 
     // آپدیت زمان به‌روزرسانی بعدی
-    if (proxyStats.nextUpdate) {
-        const nextUpdate = formatDateTime(new Date(proxyStats.nextUpdate));
+    if (proxyStats.nextUpdate || proxyStats.serviceNextUpdate) {
+        const nextUpdate = formatDateTime(new Date(proxyStats.serviceNextUpdate || proxyStats.nextUpdate));
         updateElement('proxy-next-update', nextUpdate);
     } else {
         updateElement('proxy-next-update', 'نامشخص');
     }
-}
 
+    // آپدیت وضعیت آپدیت
+    const updateStatusElement = document.getElementById('proxy-update-status');
+    if (updateStatusElement && proxyStats.updateStatus) {
+        switch (proxyStats.updateStatus) {
+            case 'updating':
+                updateStatusElement.innerHTML = '<span class="badge badge-warning"><i class="fas fa-spinner fa-spin"></i> در حال به‌روزرسانی</span>';
+                break;
+            case 'success':
+                updateStatusElement.innerHTML = '<span class="badge badge-success"><i class="fas fa-check"></i> موفق</span>';
+                break;
+            case 'error':
+                updateStatusElement.innerHTML = '<span class="badge badge-danger"><i class="fas fa-exclamation-triangle"></i> خطا</span>';
+                break;
+            case 'idle':
+            default:
+                updateStatusElement.innerHTML = '<span class="badge badge-info"><i class="fas fa-info-circle"></i> آماده</span>';
+        }
+    }
+}
 function updateSystemStats(system) {
     console.log('📊 Updating system stats:', system);
 
@@ -207,60 +242,6 @@ function updateSystemStats(system) {
     }
 }
 
-
-// تابع برای آپدیت وضعیت سرویس پروکسی
-function updateProxyServiceStatus(proxyService) {
-    try {
-        console.log('🌐 Updating proxy service status:', proxyService);
-
-        if (!proxyService) {
-            console.warn('⚠️ No proxy service data');
-            return;
-        }
-
-        // آپدیت وضعیت سرویس
-        const statusElement = document.getElementById('proxy-service-status');
-        if (statusElement) {
-            if (proxyService.isRunning) {
-                statusElement.innerHTML = '<span class="badge badge-success"><i class="fas fa-check-circle"></i> فعال</span>';
-            } else {
-                statusElement.innerHTML = '<span class="badge badge-danger"><i class="fas fa-times-circle"></i> غیرفعال</span>';
-            }
-        }
-
-        // آپدیت زمان‌ها
-        if (proxyService.lastUpdate) {
-            const lastUpdateTime = formatDateTime(new Date(proxyService.lastUpdate));
-            updateElement('proxy-last-update', lastUpdateTime);
-        }
-
-        if (proxyService.nextUpdate) {
-            const nextUpdateTime = formatDateTime(new Date(proxyService.nextUpdate));
-            updateElement('proxy-next-update', nextUpdateTime);
-        }
-
-        // آپدیت وضعیت آپدیت
-        const updateStatusElement = document.getElementById('proxy-update-status');
-        if (updateStatusElement && proxyService.status) {
-            switch (proxyService.status) {
-                case 'updating':
-                    updateStatusElement.innerHTML = '<span class="badge badge-warning"><i class="fas fa-spinner fa-spin"></i> در حال به‌روزرسانی</span>';
-                    break;
-                case 'success':
-                    updateStatusElement.innerHTML = '<span class="badge badge-success"><i class="fas fa-check"></i> موفق</span>';
-                    break;
-                case 'error':
-                    updateStatusElement.innerHTML = '<span class="badge badge-danger"><i class="fas fa-exclamation-triangle"></i> خطا</span>';
-                    break;
-                default:
-                    updateStatusElement.innerHTML = '<span class="badge badge-info"><i class="fas fa-info-circle"></i> آماده</span>';
-            }
-        }
-
-    } catch (error) {
-        console.error('❌ Error updating proxy service status:', error);
-    }
-}
 
 // تابع برای آپدیت وضعیت سرویس پروکسی
 function updateProxyServiceStatus(proxyService) {
@@ -992,26 +973,45 @@ function updateProxyServiceStatus(proxyService) {
             return;
         }
 
-        // Update proxy service status indicator
+        // آپدیت وضعیت سرویس
         const statusElement = document.getElementById('proxy-service-status');
         if (statusElement) {
-            if (proxyService.isRunning) {
-                statusElement.innerHTML = '<span class="badge badge-success">فعال</span>';
-            } else {
-                statusElement.innerHTML = '<span class="badge badge-danger">غیرفعال</span>';
+            if (proxyService.isRunning !== undefined) {
+                if (proxyService.isRunning) {
+                    statusElement.innerHTML = '<span class="badge badge-success"><i class="fas fa-check-circle"></i> فعال</span>';
+                } else {
+                    statusElement.innerHTML = '<span class="badge badge-danger"><i class="fas fa-times-circle"></i> غیرفعال</span>';
+                }
             }
         }
 
-        // Update last update time
+        // آپدیت زمان‌ها
         if (proxyService.lastUpdate) {
             const lastUpdateTime = formatDateTime(new Date(proxyService.lastUpdate));
             updateElement('proxy-last-update', lastUpdateTime);
         }
 
-        // Update next update time
         if (proxyService.nextUpdate) {
             const nextUpdateTime = formatDateTime(new Date(proxyService.nextUpdate));
             updateElement('proxy-next-update', nextUpdateTime);
+        }
+
+        // آپدیت وضعیت آپدیت
+        const updateStatusElement = document.getElementById('proxy-update-status');
+        if (updateStatusElement && proxyService.status) {
+            switch (proxyService.status) {
+                case 'updating':
+                    updateStatusElement.innerHTML = '<span class="badge badge-warning"><i class="fas fa-spinner fa-spin"></i> در حال به‌روزرسانی</span>';
+                    break;
+                case 'success':
+                    updateStatusElement.innerHTML = '<span class="badge badge-success"><i class="fas fa-check"></i> موفق</span>';
+                    break;
+                case 'error':
+                    updateStatusElement.innerHTML = '<span class="badge badge-danger"><i class="fas fa-exclamation-triangle"></i> خطا</span>';
+                    break;
+                default:
+                    updateStatusElement.innerHTML = '<span class="badge badge-info"><i class="fas fa-info-circle"></i> آماده</span>';
+            }
         }
 
     } catch (error) {

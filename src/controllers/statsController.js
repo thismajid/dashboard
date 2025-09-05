@@ -177,10 +177,15 @@ class StatsController {
             console.log('📊 Getting proxy stats from database...');
 
             // استفاده از proxyService برای آمار
-            const serviceStats = await proxyService.getProxyStats();
+            let serviceStats = null;
+            let serviceInfo = null;
 
-            if (serviceStats) {
-                return serviceStats;
+            try {
+                serviceStats = await proxyService.getProxyStats();
+                // دریافت اطلاعات سرویس پروکسی
+                serviceInfo = await proxyService.getServiceInfo();
+            } catch (serviceError) {
+                console.warn('⚠️ ProxyService not available:', serviceError.message);
             }
 
             // اگر proxyService آمار نداد، مستقیماً از دیتابیس بگیر
@@ -199,7 +204,7 @@ class StatsController {
                     .where('responseTime', '>', 0)
                     .avg('responseTime as avg')
                     .first(),
-                ProxyModel.query().orderBy('created_at', 'desc').first(),
+                ProxyModel.query().orderBy('updatedAt', 'desc').first(),
                 ProxyModel.query()
                     .sum('usageCount as totalUsage')
                     .avg('usageCount as avgUsage')
@@ -218,13 +223,25 @@ class StatsController {
                 inactive: total - active,
                 avgResponseTime: avgResponseTime,
                 successRate: total > 0 ? Math.round((active / total) * 100) : 100,
-                lastUpdate: lastUpdateResult?.created_at || null,
-                nextUpdate: null, // باید از ProxyUpdaterService بگیریم
+                lastUpdate: lastUpdateResult?.updatedAt || lastUpdateResult?.createdAt || null,
+                nextUpdate: serviceInfo?.nextUpdate || null,
                 totalUsage: parseInt(usageStats?.totalUsage) || 0,
-                avgUsage: usageStats?.avgUsage ? Math.round(usageStats.avgUsage) : 0
+                avgUsage: usageStats?.avgUsage ? Math.round(usageStats.avgUsage) : 0,
+
+                // اطلاعات سرویس
+                serviceStatus: serviceInfo?.isRunning || false,
+                serviceLastUpdate: serviceInfo?.lastUpdate || null,
+                serviceNextUpdate: serviceInfo?.nextUpdate || null,
+                updateStatus: serviceInfo?.status || 'idle'
             };
 
-            console.log('📊 Proxy stats retrieved:', stats);
+            console.log('📊 Proxy stats retrieved:', {
+                total: stats.total,
+                active: stats.active,
+                serviceStatus: stats.serviceStatus,
+                lastUpdate: stats.lastUpdate
+            });
+
             return stats;
 
         } catch (error) {
@@ -239,7 +256,11 @@ class StatsController {
                 lastUpdate: null,
                 nextUpdate: null,
                 totalUsage: 0,
-                avgUsage: 0
+                avgUsage: 0,
+                serviceStatus: false,
+                serviceLastUpdate: null,
+                serviceNextUpdate: null,
+                updateStatus: 'error'
             };
         }
     }
