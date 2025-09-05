@@ -64,6 +64,26 @@ async function initializeServices() {
         // Setup proxy updater listeners
         setupProxyUpdaterListeners();
 
+        // 🚀 Initial proxy fetch on app startup
+        try {
+            console.log('📡 Checking current proxy count before startup fetch...');
+            const proxyStats = await proxyService.getProxyStats();
+            const currentCount = proxyStats.total || 0;
+            
+            console.log(`📊 Current proxy count: ${currentCount}`);
+            
+            if (currentCount === 0) {
+                console.log('🌐 No proxies found - performing initial fetch on startup...');
+                await proxyUpdaterService.manualUpdate();
+                console.log('✅ Initial proxy fetch completed successfully on startup');
+            } else {
+                console.log('✅ Proxies already exist - skipping initial fetch');
+            }
+        } catch (startupFetchError) {
+            console.error('⚠️ Initial proxy fetch failed on startup:', startupFetchError.message);
+            console.log('📅 Will retry on next scheduled update');
+        }
+
         console.log('✅ All services initialized successfully');
 
     } catch (error) {
