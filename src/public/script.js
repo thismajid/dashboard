@@ -149,7 +149,9 @@ function updateProxyDetails(proxyStats) {
     console.log('🌐 Updating proxy details:', proxyStats);
 
     updateElement('total-proxies-detail', proxyStats.total || 0);
+    updateElement('active-proxies-detail', proxyStats.active || 0);
     updateElement('avg-proxy-response', `${proxyStats.avgResponseTime || 0}ms`);
+    updateElement('proxy-success-rate', `${proxyStats.successRate || 0}%`);
 
     // آپدیت وضعیت سرویس
     const serviceStatusElement = document.getElementById('proxy-service-status');
@@ -169,11 +171,35 @@ function updateProxyDetails(proxyStats) {
         updateElement('proxy-last-update', 'هرگز');
     }
 
-    // آپدیت زمان به‌روزرسانی بعدی
+    // آپدیت زمان به‌روزرسانی بعدی - اصلاح شده
     if (proxyStats.nextUpdate || proxyStats.serviceNextUpdate) {
-        const nextUpdate = formatDateTime(new Date(proxyStats.serviceNextUpdate || proxyStats.nextUpdate));
-        updateElement('proxy-next-update', nextUpdate);
+        const nextUpdateDate = new Date(proxyStats.serviceNextUpdate || proxyStats.nextUpdate);
+
+        // بررسی معتبر بودن تاریخ
+        if (!isNaN(nextUpdateDate.getTime())) {
+            const nextUpdate = formatDateTime(nextUpdateDate);
+            updateElement('proxy-next-update', nextUpdate);
+
+            // اضافه کردن countdown
+            const now = new Date();
+            const timeDiff = nextUpdateDate.getTime() - now.getTime();
+
+            if (timeDiff > 0) {
+                const minutes = Math.floor(timeDiff / (1000 * 60));
+                const seconds = Math.floor((timeDiff % (1000 * 60)) / 1000);
+
+                if (minutes > 0) {
+                    updateElement('proxy-next-update', `${nextUpdate} (${minutes} دقیقه مانده)`);
+                } else if (seconds > 0) {
+                    updateElement('proxy-next-update', `${nextUpdate} (${seconds} ثانیه مانده)`);
+                }
+            }
+        } else {
+            console.warn('⚠️ Invalid nextUpdate date:', proxyStats.serviceNextUpdate || proxyStats.nextUpdate);
+            updateElement('proxy-next-update', 'نامشخص');
+        }
     } else {
+        console.warn('⚠️ No nextUpdate provided');
         updateElement('proxy-next-update', 'نامشخص');
     }
 
@@ -196,6 +222,7 @@ function updateProxyDetails(proxyStats) {
         }
     }
 }
+
 function updateSystemStats(system) {
     console.log('📊 Updating system stats:', system);
 

@@ -182,7 +182,6 @@ class StatsController {
 
             try {
                 serviceStats = await proxyService.getProxyStats();
-                // دریافت اطلاعات سرویس پروکسی
                 serviceInfo = await proxyService.getServiceInfo();
             } catch (serviceError) {
                 console.warn('⚠️ ProxyService not available:', serviceError.message);
@@ -194,7 +193,7 @@ class StatsController {
                 avgResponseTimeResult,
                 lastUpdateResult,
             ] = await Promise.all([
-                ProxyModel.query().count('* as count').first(), // اصلاح شده
+                ProxyModel.query().count('* as count').first(),
                 ProxyModel.query()
                     .whereNotNull('responseTime')
                     .where('responseTime', '>', 0)
@@ -207,33 +206,43 @@ class StatsController {
             const avgResponseTime = avgResponseTimeResult?.avg ?
                 Math.round(avgResponseTimeResult.avg) : 0;
 
+            // اطمینان از وجود nextUpdate
+            let nextUpdate = serviceInfo?.nextUpdate;
+            if (!nextUpdate) {
+                // اگر nextUpdate موجود نیست، محاسبه کن
+                nextUpdate = proxyService.calculateNextUpdateTime();
+            }
+
             const stats = {
                 total: total,
-                active: total, // چون فقط تعداد کل داریم
+                active: total,
                 available: total,
                 avgResponseTime: avgResponseTime,
-                successRate: 100, // فرض کنیم همه فعال هستن
+                successRate: 100,
                 lastUpdate: lastUpdateResult?.updated_at || lastUpdateResult?.created_at || null,
-                nextUpdate: serviceInfo?.nextUpdate || null,
+                nextUpdate: nextUpdate,
 
                 // اطلاعات سرویس
-                serviceStatus: serviceInfo?.isRunning || false,
-                serviceLastUpdate: serviceInfo?.lastUpdate || null,
-                serviceNextUpdate: serviceInfo?.nextUpdate || null,
+                serviceStatus: serviceInfo?.isRunning !== undefined ? serviceInfo.isRunning : true,
+                serviceLastUpdate: serviceInfo?.lastUpdate || new Date(),
+                serviceNextUpdate: nextUpdate,
                 updateStatus: serviceInfo?.status || 'idle'
             };
 
             console.log('📊 Proxy stats retrieved:', {
                 total: stats.total,
-                active: stats.active,
-                serviceStatus: stats.serviceStatus,
-                lastUpdate: stats.lastUpdate
+                nextUpdate: stats.nextUpdate,
+                serviceStatus: stats.serviceStatus
             });
 
             return stats;
 
         } catch (error) {
             console.error('❌ Error getting proxy stats:', error);
+
+            // حتی در صورت خطا، زمان بعدی رو محاسبه کن
+            const nextUpdate = proxyService.calculateNextUpdateTime();
+
             return {
                 total: 0,
                 active: 0,
@@ -241,10 +250,10 @@ class StatsController {
                 avgResponseTime: 0,
                 successRate: 0,
                 lastUpdate: null,
-                nextUpdate: null,
+                nextUpdate: nextUpdate,
                 serviceStatus: false,
                 serviceLastUpdate: null,
-                serviceNextUpdate: null,
+                serviceNextUpdate: nextUpdate,
                 updateStatus: 'error'
             };
         }

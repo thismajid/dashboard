@@ -339,10 +339,15 @@ class ProxyService {
             // اگر Redis نداری، از متغیرهای محلی یا فایل استفاده کن
             if (!this.redis) {
                 console.warn('⚠️ Redis not available, using default service info');
+
+                // محاسبه زمان به‌روزرسانی بعدی (هر نیم ساعت)
+                const now = new Date();
+                const nextUpdate = this.calculateNextUpdateTime(now);
+
                 return {
-                    isRunning: true, // فرض کنیم فعاله
+                    isRunning: true,
                     lastUpdate: new Date(),
-                    nextUpdate: new Date(Date.now() + 30 * 60 * 1000), // 30 دقیقه بعد
+                    nextUpdate: nextUpdate,
                     status: 'idle'
                 };
             }
@@ -350,10 +355,20 @@ class ProxyService {
             // اگر از Redis استفاده می‌کنی
             const serviceInfo = await this.redis.hgetall('proxy:service:info');
 
+            // اگر nextUpdate موجود نیست، محاسبه کن
+            let nextUpdate = null;
+            if (serviceInfo.nextUpdate) {
+                nextUpdate = new Date(serviceInfo.nextUpdate);
+            } else {
+                nextUpdate = this.calculateNextUpdateTime(new Date());
+                // ذخیره در Redis
+                await this.updateServiceInfo({ nextUpdate });
+            }
+
             return {
                 isRunning: serviceInfo.isRunning === 'true',
                 lastUpdate: serviceInfo.lastUpdate ? new Date(serviceInfo.lastUpdate) : null,
-                nextUpdate: serviceInfo.nextUpdate ? new Date(serviceInfo.nextUpdate) : null,
+                nextUpdate: nextUpdate,
                 status: serviceInfo.status || 'idle'
             };
         } catch (error) {
@@ -361,10 +376,64 @@ class ProxyService {
             return {
                 isRunning: false,
                 lastUpdate: null,
-                nextUpdate: null,
+                nextUpdate: this.calculateNextUpdateTime(new Date()), // حداقل زمان بعدی رو بده
                 status: 'error'
             };
         }
+    }
+
+    // متد جدید برای محاسبه زمان به‌روزرسانی بعدی
+    calculateNextUpdateTime(currentTime = new Date()) {
+        const now = new Date(currentTime);
+        const minutes = now.getMinutes();
+        const seconds = now.getSeconds();
+
+        // پیدا کردن نزدیک‌ترین نیم ساعت بعدی (00 یا 30)
+        let nextMinutes;
+        if (minutes < 30) {
+            nextMinutes = 30;
+        } else {
+            nextMinutes = 60; // یعنی ساعت بعد، دقیقه 0
+        }
+
+        const nextUpdate = new Date(now);
+
+        if (nextMinutes === 60) {
+            nextUpdate.setHours(now.getHours() + 1);
+            nextUpdate.setMinutes(0);
+        } else {
+            nextUpdate.setMinutes(nextMinutes);
+        }
+
+        nextUpdate.setSeconds(0);
+        nextUpdate.setMilliseconds(0);
+
+        return nextUpdate;
+    }
+
+    async startProxyUpdate() {
+        const now = new Date();
+        const nextUpdate = this.calculateNextUpdateTime(now);
+
+        await this.updateServiceInfo({
+            isRunning: true,
+            lastUpdate: now,
+            nextUpdate: nextUpdate,
+            status: 'updating'
+        });
+    }
+
+    // متد برای پایان به‌روزرسانی
+    async finishProxyUpdate(success = true) {
+        const now = new Date();
+        const nextUpdate = this.calculateNextUpdateTime(now);
+
+        await this.updateServiceInfo({
+            isRunning: true,
+            lastUpdate: now,
+            nextUpdate: nextUpdate,
+            status: success ? 'success' : 'error'
+        });
     }
 
     async updateServiceInfo(info) {
