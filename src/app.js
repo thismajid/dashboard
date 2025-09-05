@@ -9,14 +9,24 @@ const path = require('path');
 const fs = require('fs');
 require('dotenv').config();
 
+// Import database and Redis
+const { connectDB, db } = require('./config/database');
+const { redis, redisStats, redisPubSub } = require('./config/redis');
+
+// Import models
+const AccountModel = require('./models/knex/Account');
+const ProxyModel = require('./models/knex/Proxy');
+const BatchModel = require('./models/knex/Batch'); // اگر وجود داره
+
 // Import services and controllers
 const InstanceWebSocketService = require('./services/instanceWebSocketService');
 const uploadController = require('./controllers/uploadController');
 const statsController = require('./controllers/statsController');
 const proxyService = require('./services/proxyService');
 const proxyUpdaterService = require('./services/proxyUpdaterService');
+const statsService = require('./services/statsService');
+const accountService = require('./services/accountService');
 const upload = require('./config/multer');
-const connectDB = require('./config/database');
 
 // Initialize Express app
 const app = express();
@@ -25,61 +35,112 @@ const server = http.createServer(app);
 // Configure Socket.IO
 const io = socketIo(server, {
     cors: {
-        origin: process.env.NODE_ENV === 'production' ? false : "*",
-        methods: ["GET", "POST"]
-    }
+        origin: process.env.NODE_ENV === 'production' ?
+            [process.env.FRONTEND_URL] : "*",
+        methods: ["GET", "POST"],
+        credentials: true
+    },
+    pingTimeout: 60000,
+    pingInterval: 25000
 });
 
 // Dashboard WebSocket (جدا از instance websocket)
 const dashboardIO = io.of('/dashboard');
 
 // Instance WebSocket Service
-const instanceWS = new InstanceWebSocketService(server);
+let instanceWS;
 
-// Connect to database
+// Initialize services after database connection
+async function initializeServices() {
+    try {
+        console.log('🔧 Initializing services...');
+
+        // Initialize Instance WebSocket Service
+        instanceWS = new InstanceWebSocketService(server);
+
+        // Start proxy updater service
+        proxyUpdaterService.start();
+
+        // Setup proxy updater listeners
+        setupProxyUpdaterListeners();
+
+        console.log('✅ All services initialized successfully');
+
+    } catch (error) {
+        console.error('❌ Error initializing services:', error);
+        throw error;
+    }
+}
+
+// Connect to database and initialize services
 connectDB().then(async () => {
     try {
+        console.log('📊 Testing database connection...');
+
         // تست اتصال دیتابیس
         const testResult = await statsController.testDatabaseConnection();
-        console.log('📊 Database test result:', testResult);
+        console.log('✅ Database test result:', testResult);
+
+        // تست اتصال Redis
+        try {
+            await statsController.testRedisConnection();
+            console.log('✅ Redis connection test successful');
+        } catch (redisError) {
+            console.warn('⚠️ Redis connection test failed:', redisError.message);
+        }
+
+        // Initialize services
+        await initializeServices();
+
     } catch (error) {
-        console.error('❌ Database test failed:', error);
+        console.error('❌ Database/Services initialization failed:', error);
+        process.exit(1);
     }
+}).catch((error) => {
+    console.error('❌ Database connection failed:', error);
+    process.exit(1);
 });
 
-// Start proxy updater service
-proxyUpdaterService.start();
-
-// Add proxy updater listeners for dashboard updates
-proxyUpdaterService.on('update-started', () => {
-    console.log('📡 Proxy update started');
-    dashboardIO.emit('proxy-update-status', {
-        status: 'updating',
-        message: 'شروع به‌روزرسانی پروکسی‌ها...',
-        timestamp: Date.now()
+// Setup proxy updater event listeners
+function setupProxyUpdaterListeners() {
+    proxyUpdaterService.on('update-started', (data) => {
+        console.log('📡 Proxy update started');
+        dashboardIO.emit('proxy-update-status', {
+            status: 'updating',
+            message: 'شروع به‌روزرسانی پروکسی‌ها...',
+            timestamp: Date.now(),
+            ...data
+        });
     });
-});
 
-proxyUpdaterService.on('update-completed', (data) => {
-    console.log('✅ Proxy update completed:', data.message);
-    dashboardIO.emit('proxy-update-status', {
-        status: 'success',
-        message: data.message,
-        stats: data.stats,
-        timestamp: Date.now(),
-        lastUpdate: Date.now()
+    proxyUpdaterService.on('update-progress', (data) => {
+        dashboardIO.emit('proxy-update-progress', {
+            ...data,
+            timestamp: Date.now()
+        });
     });
-});
 
-proxyUpdaterService.on('update-failed', (data) => {
-    console.error('❌ Proxy update failed:', data.message);
-    dashboardIO.emit('proxy-update-status', {
-        status: 'error',
-        message: data.message,
-        error: data.error?.message,
-        timestamp: Date.now()
+    proxyUpdaterService.on('update-completed', (data) => {
+        console.log('✅ Proxy update completed:', data.message);
+        dashboardIO.emit('proxy-update-status', {
+            status: 'success',
+            message: data.message,
+            stats: data.stats,
+            timestamp: Date.now(),
+            lastUpdate: Date.now()
+        });
     });
-});
+
+    proxyUpdaterService.on('update-failed', (data) => {
+        console.error('❌ Proxy update failed:', data.message);
+        dashboardIO.emit('proxy-update-status', {
+            status: 'error',
+            message: data.message,
+            error: data.error,
+            timestamp: Date.now()
+        });
+    });
+}
 
 // Security middleware
 app.use(helmet({
@@ -87,7 +148,7 @@ app.use(helmet({
         directives: {
             defaultSrc: ["'self'"],
             styleSrc: ["'self'", "'unsafe-inline'", "https://cdnjs.cloudflare.com"],
-            scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'"], // اضافه کردن unsafe-inline
+            scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'"],
             imgSrc: ["'self'", "data:", "https:"],
             connectSrc: ["'self'", "ws:", "wss:"],
             fontSrc: ["'self'", "https://cdnjs.cloudflare.com"],
@@ -107,7 +168,8 @@ if (process.env.NODE_ENV === 'production') {
 
 // Basic middleware
 app.use(cors({
-    origin: process.env.NODE_ENV === 'production' ? false : "*",
+    origin: process.env.NODE_ENV === 'production' ?
+        [process.env.FRONTEND_URL] : "*",
     credentials: true
 }));
 
@@ -118,7 +180,7 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.use(express.static(path.join(__dirname, 'public')));
 
 // Create necessary directories
-const requiredDirs = ['uploads', 'logs', 'screenshots'];
+const requiredDirs = ['uploads', 'logs', 'screenshots', 'backups'];
 requiredDirs.forEach(dir => {
     const dirPath = path.join(__dirname, '..', dir);
     if (!fs.existsSync(dirPath)) {
@@ -135,13 +197,21 @@ app.get('/', (req, res) => {
 // Health check endpoint
 app.get('/health', async (req, res) => {
     try {
-        const health = await instanceWS.getSystemHealth();
-        res.json({
-            status: 'ok',
+        const health = instanceWS ? await instanceWS.getSystemHealth() : null;
+        const dbHealth = await testDatabaseHealth();
+        const redisHealth = await testRedisHealth();
+
+        const overallHealth = dbHealth.connected && redisHealth.connected;
+
+        res.status(overallHealth ? 200 : 503).json({
+            status: overallHealth ? 'ok' : 'degraded',
             timestamp: Date.now(),
             uptime: process.uptime(),
             memory: process.memoryUsage(),
-            ...health
+            database: dbHealth,
+            redis: redisHealth,
+            system: health,
+            version: process.env.npm_package_version || '1.0.0'
         });
     } catch (error) {
         res.status(500).json({
@@ -152,34 +222,81 @@ app.get('/health', async (req, res) => {
     }
 });
 
+async function testDatabaseHealth() {
+    try {
+        const result = await AccountModel.query().count('* as count').first();
+        return {
+            connected: true,
+            accountCount: parseInt(result?.count) || 0,
+            responseTime: Date.now()
+        };
+    } catch (error) {
+        return {
+            connected: false,
+            error: error.message
+        };
+    }
+}
+
+async function testRedisHealth() {
+    try {
+        await redis.ping();
+        return {
+            connected: true,
+            responseTime: Date.now()
+        };
+    } catch (error) {
+        return {
+            connected: false,
+            error: error.message
+        };
+    }
+}
+
+// API middleware for logging
 app.use('/api', (req, res, next) => {
     console.log(`🔍 API Request: ${req.method} ${req.url}`);
-    console.log('📋 Headers:', req.headers);
-    console.log('📋 Content-Type:', req.get('Content-Type'));
+    if (process.env.NODE_ENV === 'development') {
+        console.log('📋 Headers:', req.headers);
+        console.log('📋 Content-Type:', req.get('Content-Type'));
+    }
     next();
 });
 
 // API Routes
 app.post('/api/upload', upload.single('file'), uploadController.uploadFile.bind(uploadController));
+
+// Stats routes
 app.get('/api/stats', statsController.getSystemStats.bind(statsController));
 app.get('/api/stats/performance', statsController.getPerformanceStats.bind(statsController));
 app.get('/api/stats/realtime', statsController.getRealTimeStats.bind(statsController));
 app.get('/api/stats/historical', statsController.getHistoricalStats.bind(statsController));
+app.get('/api/stats/full-report', statsController.getFullSystemReport.bind(statsController));
 
 // Batch management routes
 app.get('/api/batches', uploadController.getBatches.bind(uploadController));
 app.get('/api/batches/:batchId', uploadController.getBatchDetails.bind(uploadController));
+app.delete('/api/batches/:batchId', uploadController.deleteBatch.bind(uploadController));
+
+// Account routes
+app.get('/api/accounts/stats', async (req, res) => {
+    try {
+        const stats = await accountService.getStats();
+        res.json({ success: true, data: stats });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+});
 
 // Proxy Routes
 app.post('/api/proxies/update', async (req, res) => {
     try {
-        await proxyUpdaterService.triggerUpdate();
-
+        const result = await proxyUpdaterService.manualUpdate();
         res.json({
             success: true,
-            message: 'به‌روزرسانی پروکسی‌ها آغاز شد'
+            message: 'به‌روزرسانی پروکسی‌ها آغاز شد',
+            status: result
         });
-
     } catch (error) {
         console.error('Manual proxy update error:', error);
         res.status(500).json({
@@ -192,26 +309,50 @@ app.post('/api/proxies/update', async (req, res) => {
 app.get('/api/proxies/status', (req, res) => {
     try {
         const status = proxyUpdaterService.getStatus();
-        res.json({
-            success: true,
-            data: status
-        });
+        res.json({ success: true, data: status });
     } catch (error) {
-        res.status(500).json({
-            success: false,
-            message: error.message
-        });
+        res.status(500).json({ success: false, message: error.message });
+    }
+});
+
+app.get('/api/proxies/stats', async (req, res) => {
+    try {
+        const stats = await proxyService.getProxyStats();
+        res.json({ success: true, data: stats });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+});
+
+app.post('/api/proxies/test', async (req, res) => {
+    try {
+        const { proxyString } = req.body;
+        if (!proxyString) {
+            return res.status(400).json({
+                success: false,
+                message: 'proxyString الزامی است'
+            });
+        }
+
+        const result = await proxyUpdaterService.testSingleProxy(proxyString);
+        res.json({ success: true, data: result });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
     }
 });
 
 // Instance management routes
 app.get('/api/instances', (req, res) => {
     try {
+        if (!instanceWS) {
+            return res.status(503).json({
+                success: false,
+                message: 'Instance WebSocket service not initialized'
+            });
+        }
+
         const stats = instanceWS.getConnectedInstancesStats();
-        res.json({
-            success: true,
-            data: stats
-        });
+        res.json({ success: true, data: stats });
     } catch (error) {
         console.error('خطا در دریافت آمار instance ها:', error);
         res.status(500).json({
@@ -221,9 +362,41 @@ app.get('/api/instances', (req, res) => {
     }
 });
 
+app.get('/api/instances/:instanceId', (req, res) => {
+    try {
+        if (!instanceWS) {
+            return res.status(503).json({
+                success: false,
+                message: 'Instance WebSocket service not initialized'
+            });
+        }
+
+        const { instanceId } = req.params;
+        const instanceInfo = instanceWS.getInstanceInfo(instanceId);
+
+        if (instanceInfo) {
+            res.json({ success: true, data: instanceInfo });
+        } else {
+            res.status(404).json({
+                success: false,
+                message: 'Instance یافت نشد'
+            });
+        }
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+});
+
 // Instance Control Routes
 app.post('/api/instances/control-all', async (req, res) => {
     try {
+        if (!instanceWS) {
+            return res.status(503).json({
+                success: false,
+                message: 'Instance WebSocket service not initialized'
+            });
+        }
+
         const { action } = req.body;
 
         if (!['start', 'stop', 'restart', 'pause', 'resume'].includes(action)) {
@@ -233,7 +406,6 @@ app.post('/api/instances/control-all', async (req, res) => {
             });
         }
 
-        // Get all connected instances
         const instanceStats = instanceWS.getConnectedInstancesStats();
         const instances = instanceStats.instances || [];
 
@@ -248,7 +420,6 @@ app.post('/api/instances/control-all', async (req, res) => {
         let successCount = 0;
         let failedCount = 0;
 
-        // Send control command to all instances
         for (const instance of instances) {
             try {
                 const success = instanceWS.sendToInstance(instance.instanceId, 'control-command', {
@@ -268,7 +439,6 @@ app.post('/api/instances/control-all', async (req, res) => {
             }
         }
 
-        // Broadcast to all instances for PM2 control
         instanceWS.broadcastToInstances('pm2-control', {
             action,
             timestamp: Date.now(),
@@ -305,22 +475,34 @@ app.post('/api/instances/control-all', async (req, res) => {
 
 app.post('/api/instances/:instanceId/control', async (req, res) => {
     try {
+        if (!instanceWS) {
+            return res.status(503).json({
+                success: false,
+                message: 'Instance WebSocket service not initialized'
+            });
+        }
+
         const { instanceId } = req.params;
         const { action } = req.body;
 
-        if (!['start', 'stop', 'restart', 'pause', 'resume'].includes(action)) {
+        if (!['start', 'stop', 'restart', 'pause', 'resume', 'disconnect'].includes(action)) {
             return res.status(400).json({
                 success: false,
                 message: 'عملیات نامعتبر'
             });
         }
 
-        // Send control command to specific instance
-        const success = instanceWS.sendToInstance(instanceId, 'control-command', {
-            action,
-            timestamp: Date.now(),
-            source: 'dashboard'
-        });
+        let success = false;
+
+        if (action === 'disconnect') {
+            success = instanceWS.forceDisconnectInstance(instanceId);
+        } else {
+            success = instanceWS.sendToInstance(instanceId, 'control-command', {
+                action,
+                timestamp: Date.now(),
+                source: 'dashboard'
+            });
+        }
 
         if (success) {
             res.json({
@@ -343,34 +525,37 @@ app.post('/api/instances/:instanceId/control', async (req, res) => {
     }
 });
 
+// Test route for debugging
 app.get('/api/stats/test', async (req, res) => {
     try {
-        const Account = require('./models/Account');
-        const Proxy = require('./models/Proxy');
-
         const [
             accountCount,
             proxyCount,
             pendingAccounts,
-            accountsByStatus
+            accountsByStatus,
+            redisStats
         ] = await Promise.all([
-            Account.countDocuments({}),
-            Proxy.countDocuments({}),
-            Account.countDocuments({ status: 'pending' }),
-            Account.aggregate([
-                { $group: { _id: '$status', count: { $sum: 1 } } }
-            ])
+            AccountModel.query().count('* as count').first(),
+            ProxyModel.query().count('* as count').first(),
+            AccountModel.query().where('status', 'pending').count('* as count').first(),
+            AccountModel.query()
+                .select('status')
+                .count('* as count')
+                .groupBy('status'),
+            statsService.getStats().catch(() => null)
         ]);
 
         res.json({
             success: true,
             data: {
                 directCounts: {
-                    accounts: accountCount,
-                    proxies: proxyCount,
-                    pendingAccounts: pendingAccounts
+                    accounts: parseInt(accountCount?.count) || 0,
+                    proxies: parseInt(proxyCount?.count) || 0,
+                    pendingAccounts: parseInt(pendingAccounts?.count) || 0
                 },
                 accountsByStatus: accountsByStatus,
+                redisStats: redisStats,
+                instanceStats: instanceWS ? instanceWS.getConnectedInstancesStats() : null,
                 timestamp: Date.now()
             }
         });
@@ -390,7 +575,8 @@ function getActionText(action) {
         'stop': 'توقف',
         'restart': 'راه‌اندازی مجدد',
         'pause': 'مکث',
-        'resume': 'ادامه'
+        'resume': 'ادامه',
+        'disconnect': 'قطع اتصال'
     };
     return actionTexts[action] || action;
 }
@@ -400,120 +586,25 @@ dashboardIO.on('connection', (socket) => {
     console.log('📊 Dashboard client connected:', socket.id);
 
     // Send initial stats immediately
-    // Send initial stats immediately
     socket.on('request-stats', async () => {
-        console.log('📊 ===== STATS REQUEST RECEIVED =====');
         console.log('📊 Dashboard requesting stats from:', socket.id);
 
         try {
-            // تست مستقیم دیتابیس
-            const Account = require('./models/Account');
-            const Proxy = require('./models/Proxy');
+            // استفاده از statsController برای دریافت آمار کامل
+            const statsResult = await statsController.getSystemStats();
 
-            console.log('🔍 Testing direct database access...');
-            const accountCount = await Account.countDocuments({});
-            const proxyCount = await Proxy.countDocuments({});
-
-            console.log('📊 Direct DB counts:', { accounts: accountCount, proxies: proxyCount });
-
-            // دریافت جزئیات بیشتر
-            const [
-                pendingAccounts,
-                activeProxies,
-                accountResults
-            ] = await Promise.all([
-                Account.countDocuments({ status: 'pending' }),
-                Proxy.countDocuments({ status: 'active' }),
-                Account.aggregate([
-                    { $match: { result: { $ne: null } } },
-                    { $group: { _id: '$result', count: { $sum: 1 } } }
-                ])
-            ]);
-
-            console.log('📊 Detailed counts:', {
-                pendingAccounts,
-                activeProxies,
-                accountResults
-            });
-
-            // ساخت شیء stats به صورت مستقیم
-            const systemStats = {
-                accounts: {
-                    total: accountCount,
-                    pending: pendingAccounts,
-                    processing: 0,
-                    completed: 0,
-                    failed: 0,
-                    results: {
-                        good: 0, bad: 0, invalid: 0, '2fa': 0, passkey: 0,
-                        error: 0, lock: 0, guard: 0, 'change-pass': 0,
-                        'mobile-2step': 0, timeout: 0, 'server-error': 0
-                    }
-                },
-                proxies: {
-                    total: proxyCount,
-                    active: activeProxies || proxyCount, // اگر همه active هستند
-                    available: activeProxies || proxyCount,
-                    used: 0,
-                    failed: 0,
-                    avgResponseTime: 0,
-                    successRate: 100,
-                    lastUpdate: new Date(),
-                    nextUpdate: null
-                },
-                system: {
-                    uptime: process.uptime(),
-                    memory: {
-                        used: Math.round(process.memoryUsage().heapUsed / 1024 / 1024),
-                        total: Math.round(process.memoryUsage().heapTotal / 1024 / 1024)
-                    }
-                },
-                batches: {
-                    total: 0,
-                    completed: 0
-                }
-            };
-
-            // پردازش نتایج اکانت‌ها
-            accountResults.forEach(item => {
-                if (systemStats.accounts.results.hasOwnProperty(item._id)) {
-                    systemStats.accounts.results[item._id] = item.count;
-                }
-            });
-
-            console.log('📊 System stats object created:', JSON.stringify(systemStats, null, 2));
-
-            // Get instance stats
-            const instanceStats = instanceWS.getConnectedInstancesStats();
-            console.log('📊 Instance stats:', instanceStats);
-
-            // Get proxy service status
-            const proxyStatus = proxyUpdaterService.getStatus();
-            console.log('📊 Proxy service status:', proxyStatus);
-
-            const responseData = {
-                system: systemStats,
-                instances: instanceStats,
-                proxyService: proxyStatus,
-                timestamp: Date.now()
-            };
-
-            console.log('📊 ===== SENDING STATS TO DASHBOARD =====');
-            console.log('📊 Final response data:', {
-                totalAccounts: responseData.system?.accounts?.total,
-                pendingAccounts: responseData.system?.accounts?.pending,
-                totalProxies: responseData.system?.proxies?.total,
-                activeProxies: responseData.system?.proxies?.active
-            });
-
-            socket.emit('stats-update', responseData);
-            console.log('📊 ✅ Stats sent to dashboard via socket.emit');
+            if (statsResult.success) {
+                socket.emit('stats-update', {
+                    system: statsResult.data,
+                    timestamp: Date.now()
+                });
+                console.log('📊 ✅ Stats sent to dashboard');
+            } else {
+                throw new Error('Failed to get system stats');
+            }
 
         } catch (error) {
-            console.error('❌ ===== ERROR IN STATS REQUEST =====');
-            console.error('❌ Error details:', error);
-            console.error('❌ Error stack:', error.stack);
-
+            console.error('❌ Error in stats request:', error);
             socket.emit('error', {
                 message: 'خطا در دریافت آمار سیستم',
                 error: error.message,
@@ -522,41 +613,65 @@ dashboardIO.on('connection', (socket) => {
         }
     });
 
+    // Handle proxy update requests
+    socket.on('update-proxies', async () => {
+        try {
+            await proxyUpdaterService.manualUpdate();
+            socket.emit('notification', {
+                message: 'به‌روزرسانی پروکسی‌ها آغاز شد',
+                type: 'info'
+            });
+        } catch (error) {
+            socket.emit('notification', {
+                message: `خطا در به‌روزرسانی پروکسی‌ها: ${error.message}`,
+                type: 'error'
+            });
+        }
+    });
+
     // Handle instance control
     socket.on('start-all-instances', () => {
-        console.log('🚀 Dashboard requested start all instances');
-        instanceWS.broadcastToInstances('start-processing', {});
-        socket.emit('notification', {
-            message: 'درخواست شروع همه instance ها ارسال شد',
-            type: 'info'
-        });
+        if (instanceWS) {
+            console.log('🚀 Dashboard requested start all instances');
+            instanceWS.broadcastToInstances('start-processing', {});
+            socket.emit('notification', {
+                message: 'درخواست شروع همه instance ها ارسال شد',
+                type: 'info'
+            });
+        }
     });
 
     socket.on('stop-all-instances', () => {
-        console.log('⏹️ Dashboard requested stop all instances');
-        instanceWS.broadcastToInstances('stop-processing', {});
-        socket.emit('notification', {
-            message: 'درخواست توقف همه instance ها ارسال شد',
-            type: 'warning'
-        });
+        if (instanceWS) {
+            console.log('⏹️ Dashboard requested stop all instances');
+            instanceWS.broadcastToInstances('stop-processing', {});
+            socket.emit('notification', {
+                message: 'درخواست توقف همه instance ها ارسال شد',
+                type: 'warning'
+            });
+        }
     });
 
     socket.on('start-instance', (data) => {
-        console.log('🚀 Dashboard requested start instance:', data.instanceId);
-        instanceWS.sendToInstance(data.instanceId, 'start-processing', {});
-        socket.emit('notification', {
-            message: `درخواست شروع instance ${data.instanceId} ارسال شد`,
-            type: 'info'
-        });
+        if (instanceWS) {
+            console.log('🚀 Dashboard requested start instance:', data.instanceId);
+            instanceWS.sendToInstance(data.instanceId, 'start-processing', {});
+            socket.emit('notification', {
+                message: `درخواست شروع instance ${data.instanceId} ارسال شد`,
+                type: 'info'
+            });
+        }
     });
 
     socket.on('stop-instance', (data) => {
-        console.log('⏹️ Dashboard requested stop instance:', data.instanceId);
-        instanceWS.sendToInstance(data.instanceId, 'stop-processing', {});
-        socket.emit('notification', {
-            message: `درخواست توقف instance ${data.instanceId} ارسال شد`,
-            type: 'warning'
-        });
+        if (instanceWS) {
+            console.log('⏹️ Dashboard requested stop instance:', data.instanceId);
+            instanceWS.sendToInstance(data.instanceId, 'stop-processing', {});
+            socket.emit('notification', {
+                message: `درخواست توقف instance ${data.instanceId} ارسال شد`,
+                type: 'warning'
+            });
+        }
     });
 
     socket.on('disconnect', (reason) => {
@@ -564,57 +679,21 @@ dashboardIO.on('connection', (socket) => {
     });
 });
 
-
+// Broadcast stats to dashboard clients every 3 seconds
 setInterval(async () => {
     try {
         if (dashboardIO.sockets.size > 0) {
             console.log(`🔄 Broadcasting stats to ${dashboardIO.sockets.size} dashboard clients...`);
 
-            // مستقیماً از دیتابیس بخوانیم
-            const Account = require('./models/Account');
-            const Proxy = require('./models/Proxy');
+            const statsResult = await statsController.getSystemStats();
 
-            const [accountCount, proxyCount] = await Promise.all([
-                Account.countDocuments({}),
-                Proxy.countDocuments({})
-            ]);
-
-            console.log('📊 Broadcast counts:', { accounts: accountCount, proxies: proxyCount });
-
-            const systemStats = {
-                accounts: {
-                    total: accountCount,
-                    pending: await Account.countDocuments({ status: 'pending' }),
-                    processing: 0,
-                    completed: 0,
-                    failed: 0,
-                    results: {
-                        good: 0, bad: 0, invalid: 0, '2fa': 0, passkey: 0,
-                        error: 0, lock: 0, guard: 0, 'change-pass': 0,
-                        'mobile-2step': 0, timeout: 0, 'server-error': 0
-                    }
-                },
-                proxies: {
-                    total: proxyCount,
-                    active: proxyCount,
-                    available: proxyCount,
-                    used: 0,
-                    failed: 0,
-                    avgResponseTime: 0,
-                    successRate: 100,
-                    lastUpdate: new Date()
-                }
-            };
-
-            const responseData = {
-                system: systemStats,
-                instances: instanceWS.getConnectedInstancesStats(),
-                proxyService: proxyUpdaterService.getStatus(),
-                timestamp: Date.now()
-            };
-
-            dashboardIO.emit('stats-update', responseData);
-            console.log('📊 ✅ Broadcast completed');
+            if (statsResult.success) {
+                dashboardIO.emit('stats-update', {
+                    system: statsResult.data,
+                    timestamp: Date.now()
+                });
+                console.log('📊 ✅ Broadcast completed');
+            }
         }
     } catch (error) {
         console.error('❌ Error broadcasting stats:', error.message);
@@ -629,6 +708,13 @@ app.use((err, req, res, next) => {
         return res.status(400).json({
             success: false,
             message: 'حجم فایل بیش از حد مجاز است'
+        });
+    }
+
+    if (err.type === 'entity.parse.failed') {
+        return res.status(400).json({
+            success: false,
+            message: 'فرمت JSON نامعتبر است'
         });
     }
 
@@ -661,41 +747,48 @@ server.listen(PORT, HOST, () => {
     console.log(`🔗 Instance WebSocket: ws://${HOST}:${PORT}/instance-socket`);
     console.log(`📊 Dashboard WebSocket: ws://${HOST}:${PORT}/dashboard`);
     console.log(`🌍 Environment: ${process.env.NODE_ENV || 'development'}`);
-    console.log(`💾 MongoDB: ${process.env.MONGODB_URI}`);
-    console.log(`🔴 Redis: ${process.env.REDIS_HOST}:${process.env.REDIS_PORT}`);
+    console.log(`💾 PostgreSQL: ${process.env.DATABASE_URL || 'localhost:5432'}`);
+    console.log(`🔴 Redis: ${process.env.REDIS_HOST || 'localhost'}:${process.env.REDIS_PORT || 6379}`);
     console.log('='.repeat(60));
 });
 
 // Graceful shutdown
-const gracefulShutdown = (signal) => {
+const gracefulShutdown = async (signal) => {
     console.log(`\n🛑 Received ${signal}, shutting down gracefully...`);
 
-    // Stop proxy updater
-    proxyUpdaterService.stop();
-
+    // Stop accepting new connections
     server.close(() => {
         console.log('✅ HTTP server closed');
+    });
+
+    try {
+        // Stop services
+        if (proxyUpdaterService) {
+            proxyUpdaterService.stop();
+            console.log('✅ Proxy updater service stopped');
+        }
 
         // Close database connections
-        require('mongoose').connection.close(() => {
-            console.log('✅ MongoDB connection closed');
+        if (db()) {
+            await db().destroy();
+            console.log('✅ PostgreSQL connection closed');
+        }
 
-            // Close Redis connections
-            const { redis, redisStats, redisPubSub } = require('./config/redis');
-            Promise.all([
-                redis.quit(),
-                redisStats.quit(),
-                redisPubSub.quit()
-            ]).then(() => {
-                console.log('✅ Redis connections closed');
-                console.log('✅ Graceful shutdown completed');
-                process.exit(0);
-            }).catch((err) => {
-                console.error('❌ Error closing Redis connections:', err);
-                process.exit(1);
-            });
-        });
-    });
+        // Close Redis connections
+        await Promise.all([
+            redis.quit(),
+            redisStats.quit(),
+            redisPubSub.quit()
+        ]);
+        console.log('✅ Redis connections closed');
+
+        console.log('✅ Graceful shutdown completed');
+        process.exit(0);
+
+    } catch (error) {
+        console.error('❌ Error during graceful shutdown:', error);
+        process.exit(1);
+    }
 };
 
 process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));

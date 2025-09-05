@@ -3,7 +3,7 @@ const multer = require('multer');
 const path = require('path');
 const { StatsController } = require('../controllers/statsController');
 const { ProxyService } = require('../services/proxyService');
-const Account = require('../models/Account');
+const Account = require('../models/knex/Account');
 
 const router = express.Router();
 

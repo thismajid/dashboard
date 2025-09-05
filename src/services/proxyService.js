@@ -1,5 +1,5 @@
-// src/services/proxyService.js
-const Proxy = require('../models/Proxy');
+const { db } = require('../config/database');
+const ProxyModel = require('../models/knex/Proxy');
 
 class ProxyService {
     constructor() {
@@ -7,12 +7,12 @@ class ProxyService {
     }
 
     /**
-    * دریافت پروکسی برای instance خاص (تابع گمشده)
+    * دریافت پروکسی برای instance خاص
     */
     async getProxyForInstance(instanceId) {
         try {
             // پیدا کردن یک پروکسی فعال و حذف آن در همان عملیات
-            const proxy = await Proxy.findOneAndDelete(
+            const proxy = await ProxyModel.findOneAndDelete(
                 { status: 'active' },
                 {
                     sort: {
@@ -31,7 +31,7 @@ class ProxyService {
             console.log(`🌐 Proxy assigned to ${instanceId}: ${proxy.host}:${proxy.port}`);
 
             return {
-                id: proxy._id.toString(),
+                id: proxy.id.toString(),
                 host: proxy.host,
                 port: proxy.port,
                 username: proxy.username,
@@ -50,11 +50,10 @@ class ProxyService {
     }
 
     /**
-    * گزارش وضعیت پروکسی (تابع گمشده)
+    * گزارش وضعیت پروکسی
     */
     async reportProxyStatus(proxyId, instanceId, success, responseTime, error = null) {
         try {
-            // چون پروکسی بعد از استفاده حذف میشه، فقط لاگ می‌کنیم
             const status = success ? '✅ SUCCESS' : '❌ FAILED';
             const errorMsg = error ? ` - Error: ${error}` : '';
 
@@ -65,28 +64,25 @@ class ProxyService {
 
             return true;
         } catch (err) {
-            console.error('خطا در گزارش وضعیت پروکسی:', err);
+            console.error('❌ خطا در گزارش وضعیت پروکسی:', err);
             return false;
         }
     }
 
     /**
-    * آزادسازی پروکسی‌های stuck (برای سازگاری با کد قبلی)
+    * آزادسازی پروکسی‌های stuck
     */
     async releaseStuckProxies(timeoutMinutes = 10) {
         try {
-            // چون پروکسی‌ها بعد از استفاده حذف میشن، نیازی به آزادسازی نیست
-            // ولی برای سازگاری این تابع رو نگه می‌داریم
-
             console.log(`🔄 Checking for stuck proxies (timeout: ${timeoutMinutes}min)`);
 
-            // اختیاری: پاکسازی پروکسی‌های قدیمی
+            // پاکسازی پروکسی‌های قدیمی
             const cleanedCount = await this.cleanupOldProxies(24);
 
             console.log(`🧹 Cleaned up ${cleanedCount} old proxies`);
             return cleanedCount;
         } catch (error) {
-            console.error('خطا در آزادسازی پروکسی‌های stuck:', error);
+            console.error('❌ خطا در آزادسازی پروکسی‌های stuck:', error);
             return 0;
         }
     }
@@ -95,63 +91,19 @@ class ProxyService {
     * دریافت آمار پروکسی‌ها
     */
     async getProxyStats() {
-        try {
-            const [
-                totalProxies,
-                avgResponseTime
-            ] = await Promise.all([
-                Proxy.countDocuments({ status: 'active' }),
-                Proxy.aggregate([
-                    {
-                        $match: {
-                            status: 'active',
-                            responseTime: { $ne: null, $gt: 0 }
-                        }
-                    },
-                    {
-                        $group: {
-                            _id: null,
-                            avg: { $avg: '$responseTime' }
-                        }
-                    }
-                ])
-            ]);
-
-            const stats = {
-                total: totalProxies,
-                available: totalProxies,
-                in_use: 0, // چون پروکسی‌ها یکبار مصرف هستن
-                failed: 0,
-                testing: 0,
-                avgResponseTime: avgResponseTime.length > 0 ?
-                    Math.round(avgResponseTime[0].avg) : 0,
-                avg_response_time: avgResponseTime.length > 0 ?
-                    Math.round(avgResponseTime[0].avg) : 0 // برای سازگاری
-            };
-
-            return stats;
-
-        } catch (error) {
-            console.error('❌ Error getting proxy stats:', error);
-            return {
-                total: 0,
-                available: 0,
-                in_use: 0,
-                failed: 0,
-                testing: 0,
-                avgResponseTime: 0,
-                avg_response_time: 0
-            };
-        }
+        return await ProxyModel.getProxyStats();
     }
 
-    // دریافت و حذف پروکسی (استفاده یکبار)
+    /**
+    * دریافت و حذف پروکسی (استفاده یکبار)
+    */
     async getAndConsumeProxy() {
-        // این تابع همون کار getProxyForInstance رو می‌کنه
         return await this.getProxyForInstance('direct-consume');
     }
 
-    // ساخت URL پروکسی
+    /**
+    * ساخت URL پروکسی
+    */
     buildProxyUrl(proxy) {
         const auth = proxy.username && proxy.password ?
             `${proxy.username}:${proxy.password}@` : '';
@@ -159,16 +111,20 @@ class ProxyService {
         return `${protocol}://${auth}${proxy.host}:${proxy.port}`;
     }
 
-    // دریافت تمام پروکسی‌های موجود (برای نمایش)
+    /**
+    * دریافت تمام پروکسی‌های موجود
+    */
     async getAllProxies(limit = 100) {
         try {
-            const proxies = await Proxy.find({ status: 'active' })
-                .select('host port protocol responseTime createdAt usageCount')
-                .sort({ responseTime: 1, createdAt: 1 })
+            const proxies = await ProxyModel.query()
+                .where('status', 'active')
+                .select('id', 'host', 'port', 'protocol', 'responseTime', 'createdAt', 'usageCount')
+                .orderBy('responseTime', 'asc')
+                .orderBy('createdAt', 'asc')
                 .limit(limit);
 
             return proxies.map(proxy => ({
-                id: proxy._id.toString(),
+                id: proxy.id.toString(),
                 host: proxy.host,
                 port: proxy.port,
                 protocol: proxy.protocol || 'http',
@@ -184,20 +140,22 @@ class ProxyService {
         }
     }
 
-    // حذف پروکسی‌های قدیمی (اختیاری - برای پاکسازی)
+    /**
+    * حذف پروکسی‌های قدیمی
+    */
     async cleanupOldProxies(olderThanHours = 24) {
         try {
             const cutoffTime = new Date(Date.now() - (olderThanHours * 60 * 60 * 1000));
 
-            const result = await Proxy.deleteMany({
-                createdAt: { $lt: cutoffTime }
+            const deletedCount = await ProxyModel.deleteMany({
+                createdAt: cutoffTime // کمتر از زمان مشخص شده
             });
 
-            if (result.deletedCount > 0) {
-                console.log(`🗑️ Cleaned up ${result.deletedCount} old proxies`);
+            if (deletedCount > 0) {
+                console.log(`🗑️ Cleaned up ${deletedCount} old proxies`);
             }
 
-            return result.deletedCount;
+            return deletedCount;
 
         } catch (error) {
             console.error('❌ Error cleaning up old proxies:', error);
@@ -205,7 +163,9 @@ class ProxyService {
         }
     }
 
-    // تست یک پروکسی (بدون حذف)
+    /**
+    * تست یک پروکسی
+    */
     async testSingleProxy(proxyString) {
         return new Promise((resolve) => {
             const startTime = Date.now();
@@ -289,18 +249,23 @@ class ProxyService {
         });
     }
 
-    // دریافت پروکسی بعدی (بدون حذف - برای نمایش)
+    /**
+    * دریافت پروکسی بعدی (بدون حذف)
+    */
     async getNextProxy() {
         try {
-            const proxy = await Proxy.findOne({ status: 'active' })
-                .sort({ usageCount: 1, responseTime: 1 });
+            const proxy = await ProxyModel.query()
+                .where('status', 'active')
+                .orderBy('usageCount', 'asc')
+                .orderBy('responseTime', 'asc')
+                .first();
 
             if (!proxy) {
                 return null;
             }
 
             return {
-                id: proxy._id.toString(),
+                id: proxy.id.toString(),
                 host: proxy.host,
                 port: proxy.port,
                 username: proxy.username,
@@ -317,11 +282,51 @@ class ProxyService {
     }
 
     /**
+    * بروزرسانی پروکسی‌ها (جایگزینی کل لیست) با تراکنش
+    */
+    async updateProxies(newProxies) {
+        const trx = await db().transaction();
+
+        try {
+            const proxyModel = ProxyModel.withTransaction(trx);
+
+            // حذف تمام پروکسی‌های موجود
+            await proxyModel.query().del();
+
+            // اگر پروکسی جدید وجود داشته باشد، اضافه کن
+            if (newProxies && newProxies.length > 0) {
+                const proxyRows = newProxies.map(proxy => ({
+                    host: proxy.host,
+                    port: proxy.port,
+                    username: proxy.username || null,
+                    password: proxy.password || null,
+                    protocol: proxy.protocol || 'http',
+                    status: proxy.status || 'active',
+                    responseTime: proxy.responseTime || null,
+                    source: proxy.source || 'api',
+                    usageCount: proxy.usageCount || 0,
+                    createdAt: new Date(),
+                    updatedAt: new Date()
+                }));
+
+                await proxyModel.insertMany(proxyRows);
+            }
+
+            await trx.commit();
+            console.log(`✅ ${newProxies?.length || 0} پروکسی بروزرسانی شد`);
+            return newProxies?.length || 0;
+
+        } catch (error) {
+            await trx.rollback();
+            console.error('❌ خطا در بروزرسانی پروکسی‌ها:', error);
+            throw error;
+        }
+    }
+
+    /**
     * آزادسازی اکانت‌های قفل شده (برای سازگاری)
     */
     async releaseAccountsByIds(accountIds) {
-        // این تابع در accountService باید باشه، نه proxyService
-        // ولی برای جلوگیری از خطا، یه تابع خالی می‌ذاریم
         console.log(`⚠️ releaseAccountsByIds called in proxyService - should be in accountService`);
         return true;
     }
