@@ -53,8 +53,8 @@ class AccountService {
                 totalAccounts: accounts.length,
                 status: 'queued',
                 uploadedBy: JSON.stringify(batchInfo.uploadedBy || {}),
-                createdAt: new Date(),
-                updatedAt: new Date()
+                created_at: new Date(),
+                updated_at: new Date()
             });
 
             // آماده‌سازی اکانت‌ها
@@ -70,8 +70,8 @@ class AccountService {
                     originalData: account,
                     lineNumber: account.lineNumber || index + 1
                 }),
-                createdAt: new Date(),
-                updatedAt: new Date()
+                created_at: new Date(),
+                updated_at: new Date()
             }));
 
             // Bulk insert اکانت‌ها
@@ -106,7 +106,6 @@ class AccountService {
             const accounts = await accountModel.query()
                 .where('status', 'pending')
                 .orderBy('createdAt', 'asc')
-                .orderBy('processingAttempts', 'asc')
                 .limit(batchSize);
 
             if (accounts.length === 0) {
@@ -120,7 +119,7 @@ class AccountService {
                 .whereIn('id', accountIds)
                 .update({
                     status: 'processing',
-                    updatedAt: new Date()
+                    updated_at: new Date()
                 });
 
             // به‌روزرسانی وضعیت batch به processing
@@ -131,7 +130,7 @@ class AccountService {
                 .update({
                     status: 'processing',
                     startedAt: new Date(),
-                    updatedAt: new Date()
+                    updated_at: new Date()
                 });
 
             await trx.commit();
@@ -184,7 +183,7 @@ class AccountService {
                 await accountModel.findByIdAndUpdate(+account.id, {
                     status: 'completed',
                     result: result.status,
-                    updatedAt: new Date()
+                    updated_at: new Date()
                 });
 
                 // به‌روزرسانی آمار batch
@@ -212,7 +211,7 @@ class AccountService {
                 },
                 {
                     status: 'pending',
-                    updatedAt: new Date()
+                    updated_at: new Date()
                 }
             );
 
@@ -237,7 +236,7 @@ class AccountService {
                 },
                 {
                     status: 'pending',
-                    updatedAt: new Date()
+                    updated_at: new Date()
                 }
             );
 
