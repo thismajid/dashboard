@@ -106,6 +106,7 @@ class AccountService {
             const accounts = await accountModel.query()
                 .where('status', 'pending')
                 .orderBy('createdAt', 'asc')
+                .orderBy('processingAttempts', 'asc')
                 .limit(batchSize);
 
             if (accounts.length === 0) {
@@ -119,9 +120,6 @@ class AccountService {
                 .whereIn('id', accountIds)
                 .update({
                     status: 'processing',
-                    lockedBy: instanceId,
-                    lockedAt: new Date(),
-                    processingAttempts: db().raw('processing_attempts + 1'),
                     updatedAt: new Date()
                 });
 
@@ -140,7 +138,7 @@ class AccountService {
 
             // فرمت کردن برای اسکریپت
             return accounts.map(acc => ({
-                id: acc.id.toString(),
+                id: acc.id,
                 email: acc.email,
                 password: acc.password,
                 batchId: acc.batchId,
@@ -172,7 +170,7 @@ class AccountService {
 
                 // جستجو بر اساس ID یا email
                 if (result?.id) {
-                    account = await accountModel.findById(result.id);
+                    account = await accountModel.findById(+result.id);
                 } else if (result?.email) {
                     account = await accountModel.findOne({ email: result.email });
                 }
@@ -183,17 +181,14 @@ class AccountService {
                 }
 
                 // به‌روزرسانی اکانت
-                await accountModel.findByIdAndUpdate(account.id, {
+                await accountModel.findByIdAndUpdate(+account.id, {
                     status: 'completed',
                     result: result.status,
-                    lockedBy: null,
-                    lockedAt: null,
                     updatedAt: new Date()
                 });
 
                 // به‌روزرسانی آمار batch
-                const mappedResult = this.mapStatusToResult(result.status);
-                await batchModel.incrementResult(account.batchId, mappedResult);
+                // await batchModel.incrementResult(account.batchId, mappedResult);
             }
 
             await trx.commit();
@@ -213,13 +208,10 @@ class AccountService {
         try {
             const result = await AccountModel.updateMany(
                 {
-                    lockedBy: instanceId,
                     status: 'processing'
                 },
                 {
                     status: 'pending',
-                    lockedBy: null,
-                    lockedAt: null,
                     updatedAt: new Date()
                 }
             );
@@ -245,8 +237,6 @@ class AccountService {
                 },
                 {
                     status: 'pending',
-                    lockedBy: null,
-                    lockedAt: null,
                     updatedAt: new Date()
                 }
             );
@@ -258,26 +248,6 @@ class AccountService {
             console.error('❌ خطا در آزادسازی اکانت‌ها:', error);
             throw error;
         }
-    }
-
-    /**
-    * تبدیل status اسکریپت به نتیجه دیتابیس
-    */
-    mapStatusToResult(scriptStatus) {
-        const statusMap = {
-            'good': 'good',
-            'lock': 'bad',
-            'guard': 'bad',
-            'change_pass': 'bad',
-            '2fa': '2fa',
-            'mobile_2step': '2fa',
-            'passkey': 'passkey',
-            'server_error': 'error',
-            'unknown': 'invalid',
-            'error': 'error'
-        };
-
-        return statusMap[scriptStatus] || 'invalid';
     }
 
     /**
