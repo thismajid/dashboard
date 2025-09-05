@@ -43,16 +43,17 @@ class AccountService {
             const batchModel = BatchModel.withTransaction(trx);
             const accountModel = AccountModel.withTransaction(trx);
 
-            // ایجاد رکورد batch
+            // ایجاد رکورد batch با ستون‌های واقعی
             await batchModel.create({
                 batchId: batchInfo.batchId,
                 fileName: batchInfo.fileName,
                 fileSize: batchInfo.fileSize,
-                fileType: batchInfo.fileType,
-                filePath: batchInfo.filePath,
-                totalAccounts: accounts.length,
-                status: 'queued',
-                uploadedBy: JSON.stringify(batchInfo.uploadedBy || {}),
+                accountCount: accounts.length, // استفاده از accountCount به جای totalAccounts
+                status: 'processing', // از enum های تعریف شده استفاده کن
+                originalName: batchInfo.originalName || batchInfo.fileName,
+                mimeType: batchInfo.fileType || batchInfo.mimeType,
+                uploadIp: batchInfo.uploadIp || null,
+                statsPending: accounts.length, // همه اکانت‌ها در ابتدا pending هستند
                 created_at: new Date(),
                 updated_at: new Date()
             });
@@ -100,8 +101,6 @@ class AccountService {
             const batchModel = BatchModel.withTransaction(trx);
 
             // پیدا کردن اکانت‌های آماده پردازش
-            const timeoutDate = new Date(Date.now() - 10 * 60 * 1000); // 10 دقیقه timeout
-
             const accounts = await accountModel.query()
                 .where('status', 'pending')
                 .orderBy('created_at', 'asc')
@@ -121,15 +120,22 @@ class AccountService {
                     updated_at: new Date()
                 });
 
-            // به‌روزرسانی وضعیت batch به processing
-            const batchIds = [...new Set(accounts.map(acc => acc.batchId))];
-            await batchModel.query()
-                .whereIn('batchId', batchIds)
-                .where('status', 'queued')
-                .update({
-                    status: 'processing',
-                    updated_at: new Date()
-                });
+            // به‌روزرسانی آمار batch
+            const batchUpdates = {};
+            accounts.forEach(acc => {
+                if (!batchUpdates[acc.batchId]) {
+                    batchUpdates[acc.batchId] = 0;
+                }
+                batchUpdates[acc.batchId]++;
+            });
+
+            // کاهش statsPending و افزایش آمار پردازش
+            for (const [batchId, count] of Object.entries(batchUpdates)) {
+                await batchModel.query()
+                    .where('batchId', batchId)
+                    .decrement('statsPending', count)
+                    .update({ updated_at: new Date() });
+            }
 
             await trx.commit();
 
@@ -159,6 +165,11 @@ class AccountService {
             const accountModel = AccountModel.withTransaction(trx);
             const batchModel = BatchModel.withTransaction(trx);
 
+            console.log(`📊 Processing ${results.length} results from instance ${instanceId}`);
+
+            // گروه‌بندی نتایج بر اساس batchId
+            const batchUpdates = {};
+
             for (const result of results) {
                 console.log('submitBatchResults =====> ', result);
 
@@ -172,19 +183,71 @@ class AccountService {
                 }
 
                 if (!account) {
-                    console.warn("Account not found");
+                    console.warn(`⚠️ Account not found for:`, result);
                     continue;
                 }
+
+                // نرمال‌سازی نتیجه
+                const normalizedResult = this.normalizeResult(result.status);
+
+                console.log(`📝 Updating account ${account.id}: ${result.status} -> ${normalizedResult}`);
 
                 // به‌روزرسانی اکانت
                 await accountModel.findByIdAndUpdate(+account.id, {
                     status: 'completed',
-                    result: result.status,
+                    result: normalizedResult,
                     updated_at: new Date()
                 });
 
-                // به‌روزرسانی آمار batch
-                await batchModel.incrementResult(account.batchId, mappedResult);
+                // آماده‌سازی آپدیت batch
+                if (account.batchId) {
+                    if (!batchUpdates[account.batchId]) {
+                        batchUpdates[account.batchId] = {
+                            statsGood: 0,
+                            statsBad: 0,
+                            statsErrors: 0,
+                            statsSaved: 0
+                        };
+                    }
+
+                    // افزایش آمار مربوطه
+                    switch (normalizedResult) {
+                        case 'good':
+                            batchUpdates[account.batchId].statsGood++;
+                            break;
+                        case 'bad':
+                        case 'invalid':
+                        case 'lock':
+                        case 'guard':
+                        case 'change-pass':
+                            batchUpdates[account.batchId].statsBad++;
+                            break;
+                        case '2fa':
+                        case 'passkey':
+                        case 'error':
+                        case 'timeout':
+                        case 'server-error':
+                        default:
+                            batchUpdates[account.batchId].statsErrors++;
+                            break;
+                    }
+
+                    batchUpdates[account.batchId].statsSaved++;
+                }
+            }
+
+            // اعمال آپدیت‌های batch
+            for (const [batchId, updates] of Object.entries(batchUpdates)) {
+                await batchModel.query()
+                    .where('batchId', batchId)
+                    .increment('statsGood', updates.statsGood)
+                    .increment('statsBad', updates.statsBad)
+                    .increment('statsErrors', updates.statsErrors)
+                    .increment('statsSaved', updates.statsSaved)
+                    .update({ updated_at: new Date() });
+
+                // بررسی اتمام batch
+                await this.checkBatchCompletion(batchId, batchModel);
             }
 
             await trx.commit();
@@ -198,14 +261,93 @@ class AccountService {
     }
 
     /**
+    * بررسی اتمام batch
+    */
+    async checkBatchCompletion(batchId, batchModel = null) {
+        try {
+            const model = batchModel || BatchModel;
+            const batch = await model.findOne({ batchId });
+
+            if (!batch) {
+                console.warn(`⚠️ Batch ${batchId} not found`);
+                return;
+            }
+
+            // اگر تعداد ذخیره شده برابر تعداد کل باشد
+            if (batch.statsSaved >= batch.accountCount) {
+                await model.findOneAndUpdate(
+                    { batchId },
+                    {
+                        status: 'completed',
+                        processedAt: new Date(),
+                        updated_at: new Date()
+                    }
+                );
+
+                console.log(`🎉 Batch ${batchId} completed! (${batch.statsSaved}/${batch.accountCount})`);
+            }
+
+        } catch (error) {
+            console.error(`❌ خطا در بررسی اتمام batch ${batchId}:`, error);
+        }
+    }
+
+    /**
+    * نرمال‌سازی نتایج
+    */
+    normalizeResult(status) {
+        if (!status) return 'error';
+
+        const statusLower = status.toString().toLowerCase();
+
+        // نقشه‌برداری نتایج مختلف
+        const resultMap = {
+            'good': 'good',
+            'success': 'good',
+            'valid': 'good',
+            'ok': 'good',
+
+            'bad': 'bad',
+            'failed': 'bad',
+            'fail': 'bad',
+            'wrong': 'bad',
+            'lock': 'bad',
+            'locked': 'bad',
+            'guard': 'bad',
+            'change-pass': 'bad',
+            'change_pass': 'bad',
+
+            'invalid': 'invalid',
+            'not_valid': 'invalid',
+            'notvalid': 'invalid',
+
+            '2fa': '2fa',
+            'two_factor': '2fa',
+            'twofactor': '2fa',
+            'two-factor': '2fa',
+            'mobile-2step': '2fa',
+            'mobile_2step': '2fa',
+
+            'passkey': 'passkey',
+            'pass_key': 'passkey',
+            'security_key': 'passkey',
+
+            'error': 'error',
+            'timeout': 'error',
+            'server_error': 'error',
+            'connection_error': 'error'
+        };
+
+        return resultMap[statusLower] || 'error';
+    }
+
+    /**
     * آزادسازی اکانت‌های قفل شده توسط instance خاص
     */
     async releaseLockedAccounts(instanceId) {
         try {
             const result = await AccountModel.updateMany(
-                {
-                    status: 'processing'
-                },
+                { status: 'processing' },
                 {
                     status: 'pending',
                     updated_at: new Date()
