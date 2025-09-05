@@ -51,9 +51,9 @@ class ProxyUpdaterService extends EventEmitter {
             this.triggerUpdate();
         }, 5000);
 
-        // تنظیم cron job برای اجرا در دقیقه 0 و 15 هر ساعت
-        // '0,15 * * * *' = دقیقه 0 و 15 از هر ساعت
-        this.cronJob = cron.schedule('0,15 * * * *', () => {
+        // تنظیم cron job برای اجرا در دقیقه 0 و 25 هر ساعت
+        // '0,25 * * * *' = دقیقه 0 و 25 از هر ساعت
+        this.cronJob = cron.schedule('0,25 * * * *', () => {
             const now = new Date();
             console.log(`⏰ Scheduled proxy update triggered at: ${now.toLocaleString('fa-IR')}`);
             this.triggerUpdate();
