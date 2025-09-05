@@ -112,14 +112,14 @@ class InstanceWebSocketService {
 
             socket.on('submit-results', async (data) => {
                 try {
-                    // const instanceData = this.connectedInstances.get(socket.id);
-                    // if (!instanceData) {
-                    //     socket.emit('error', {
-                    //         message: 'Instance not registered',
-                    //         code: 'INSTANCE_NOT_REGISTERED'
-                    //     });
-                    //     return;
-                    // }
+                    const instanceData = this.connectedInstances.get(socket.id);
+                    if (!instanceData) {
+                        socket.emit('error', {
+                            message: 'Instance not registered',
+                            code: 'INSTANCE_NOT_REGISTERED'
+                        });
+                        return;
+                    }
 
                     const { results, proxyResult, batchInfo } = data;
 
