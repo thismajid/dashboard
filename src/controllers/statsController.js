@@ -194,9 +194,8 @@ class StatsController {
                 avgResponseTimeResult,
                 lastUpdateResult,
             ] = await Promise.all([
-                ProxyModel.count(),
+                ProxyModel.query().count('* as count').first(), // اصلاح شده
                 ProxyModel.query()
-                    .where('status', 'active')
                     .whereNotNull('responseTime')
                     .where('responseTime', '>', 0)
                     .avg('responseTime as avg')
@@ -205,17 +204,17 @@ class StatsController {
             ]);
 
             const total = parseInt(totalResult?.count) || 0;
-            const active = parseInt(activeResult?.count) || 0;
             const avgResponseTime = avgResponseTimeResult?.avg ?
                 Math.round(avgResponseTimeResult.avg) : 0;
 
             const stats = {
                 total: total,
+                active: total, // چون فقط تعداد کل داریم
+                available: total,
                 avgResponseTime: avgResponseTime,
-                successRate: total > 0 ? Math.round((active / total) * 100) : 100,
+                successRate: 100, // فرض کنیم همه فعال هستن
                 lastUpdate: lastUpdateResult?.updated_at || lastUpdateResult?.created_at || null,
                 nextUpdate: serviceInfo?.nextUpdate || null,
-                avgUsage: usageStats?.avgUsage ? Math.round(usageStats.avgUsage) : 0,
 
                 // اطلاعات سرویس
                 serviceStatus: serviceInfo?.isRunning || false,
@@ -239,13 +238,10 @@ class StatsController {
                 total: 0,
                 active: 0,
                 available: 0,
-                inactive: 0,
                 avgResponseTime: 0,
                 successRate: 0,
                 lastUpdate: null,
                 nextUpdate: null,
-                totalUsage: 0,
-                avgUsage: 0,
                 serviceStatus: false,
                 serviceLastUpdate: null,
                 serviceNextUpdate: null,

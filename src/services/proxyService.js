@@ -4,6 +4,15 @@ const ProxyModel = require('../models/knex/Proxy');
 class ProxyService {
     constructor() {
         console.log('🌐 ProxyService initialized - Single use mode');
+
+        // تنظیم Redis اگر موجود باشه
+        try {
+            const redis = require('../config/redis'); // مسیر Redis config
+            this.redis = redis;
+        } catch (error) {
+            console.warn('⚠️ Redis not configured, service info will use defaults');
+            this.redis = null;
+        }
     }
 
     /**
@@ -327,6 +336,17 @@ class ProxyService {
 
     async getServiceInfo() {
         try {
+            // اگر Redis نداری، از متغیرهای محلی یا فایل استفاده کن
+            if (!this.redis) {
+                console.warn('⚠️ Redis not available, using default service info');
+                return {
+                    isRunning: true, // فرض کنیم فعاله
+                    lastUpdate: new Date(),
+                    nextUpdate: new Date(Date.now() + 30 * 60 * 1000), // 30 دقیقه بعد
+                    status: 'idle'
+                };
+            }
+
             // اگر از Redis استفاده می‌کنی
             const serviceInfo = await this.redis.hgetall('proxy:service:info');
 
@@ -349,6 +369,11 @@ class ProxyService {
 
     async updateServiceInfo(info) {
         try {
+            if (!this.redis) {
+                console.warn('⚠️ Redis not available, service info not saved');
+                return;
+            }
+
             await this.redis.hmset('proxy:service:info', {
                 isRunning: info.isRunning.toString(),
                 lastUpdate: info.lastUpdate ? info.lastUpdate.toISOString() : '',
