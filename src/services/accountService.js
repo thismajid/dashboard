@@ -184,7 +184,7 @@ class AccountService {
                 });
 
                 // به‌روزرسانی آمار batch
-                // await batchModel.incrementResult(account.batchId, mappedResult);
+                await batchModel.incrementResult(account.batchId, mappedResult);
             }
 
             await trx.commit();
