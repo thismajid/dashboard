@@ -194,7 +194,7 @@ class StatsController {
                 avgResponseTimeResult,
                 lastUpdateResult,
             ] = await Promise.all([
-                ProxyModel.query().count('* as count').first(),
+                ProxyModel.count(),
                 ProxyModel.query()
                     .where('status', 'active')
                     .whereNotNull('responseTime')
