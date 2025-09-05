@@ -308,6 +308,11 @@ class InstanceWebSocketService {
                     socket.emit('accounts-assigned', accountsData);
                     console.log(`📋 ${accounts.length} accounts assigned to ${instanceData.instanceId}`);
 
+                    await statsService.updateInstance(instanceData.instanceId, {
+                        status: 'working',
+                        currentBatch: JSON.stringify(instanceData.currentBatch)
+                    });
+
                 } catch (error) {
                     console.error('❌ خطا در ارسال اکانت‌ها:', error);
                     socket.emit('error', { message: error.message });
