@@ -251,6 +251,90 @@ class InstanceWebSocketService {
                 }
             });
 
+            socket.on('request-proxy', async () => {
+                try {
+                    const instanceData = this.connectedInstances.get(socket.id);
+                    if (!instanceData) {
+                        socket.emit('error', { message: 'Instance not registered' });
+                        return;
+                    }
+
+                    const proxy = await proxyService.getProxyForInstance(instanceData.instanceId);
+
+                    if (!proxy) {
+                        socket.emit('no-proxy-available', {
+                            message: 'پروکسی در دسترس نیست',
+                            retryAfter: 60000,
+                            timestamp: Date.now()
+                        });
+                        return;
+                    }
+
+                    socket.emit('proxy-assigned', proxy);
+                    console.log(`🌐 Proxy assigned to ${instanceData.instanceId}: ${proxy.host}:${proxy.port}`);
+
+                } catch (error) {
+                    console.error('❌ خطا در ارسال پروکسی:', error);
+                    socket.emit('error', { message: error.message });
+                }
+            });
+
+            socket.on('request-accounts', async (data) => {
+                try {
+                    const instanceData = this.connectedInstances.get(socket.id);
+                    if (!instanceData) {
+                        socket.emit('error', { message: 'Instance not registered' });
+                        return;
+                    }
+
+                    const { batchSize = 2 } = data;
+                    const accounts = await accountService.getAccountBatch(instanceData.instanceId, batchSize);
+
+                    if (accounts.length === 0) {
+                        socket.emit('no-accounts-available', {
+                            message: 'اکانتی برای پردازش موجود نیست',
+                            retryAfter: 30000,
+                            timestamp: Date.now()
+                        });
+                        return;
+                    }
+
+                    const accountsData = {
+                        accounts: accounts,
+                        batchId: accounts[0]?.batchId || Date.now(),
+                        timestamp: Date.now()
+                    };
+
+                    socket.emit('accounts-assigned', accountsData);
+                    console.log(`📋 ${accounts.length} accounts assigned to ${instanceData.instanceId}`);
+
+                } catch (error) {
+                    console.error('❌ خطا در ارسال اکانت‌ها:', error);
+                    socket.emit('error', { message: error.message });
+                }
+            });
+
+            socket.on('release-accounts', async (data) => {
+                try {
+                    const { accountIds } = data;
+                    await accountService.releaseAccountsByIds(accountIds);
+                    console.log(`🔓 Released ${accountIds.length} accounts`);
+                } catch (error) {
+                    console.error('❌ خطا در آزادسازی اکانت‌ها:', error);
+                }
+            });
+
+            // آزادسازی پروکسی
+            socket.on('release-proxy', async (data) => {
+                try {
+                    const { proxyId, error } = data;
+                    await proxyService.releaseProxy(proxyId, error);
+                    console.log(`🔓 Released proxy: ${proxyId}`);
+                } catch (error) {
+                    console.error('❌ خطا در آزادسازی پروکسی:', error);
+                }
+            });
+
             socket.on('error-report', async (data) => {
                 try {
                     const instanceData = this.connectedInstances.get(socket.id);
