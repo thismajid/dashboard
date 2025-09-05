@@ -83,13 +83,6 @@ class StatsController {
         try {
             console.log('📊 Getting account stats from database...');
 
-            // استفاده از accountService برای آمار
-            const serviceStats = await accountService.getStats();
-
-            if (serviceStats && serviceStats.accounts) {
-                return serviceStats.accounts;
-            }
-
             // اگر accountService آمار نداد، مستقیماً از دیتابیس بگیر
             const [
                 totalResult,
@@ -151,7 +144,11 @@ class StatsController {
                     Math.round(((resultStats.good || 0) / statusStats.completed) * 100) : 0
             };
 
-            console.log('📊 Account stats retrieved:', stats);
+            console.log('📊 Account stats retrieved with results:', {
+                total: stats.total,
+                results: stats.results
+            });
+
             return stats;
 
         } catch (error) {

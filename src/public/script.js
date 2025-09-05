@@ -128,18 +128,88 @@ async function fetchStatsViaAPI() {
 // Handle stats update
 function handleStatsUpdate(data) {
     if (!data) return;
-    console.log('📊 Stats update:', data);
-    if (data.system) updateSystemStats(data.system);
+    console.log('📊 Stats update received:', data);
+
+    if (data.system) {
+        updateSystemStats(data.system);
+        updateAccountDetails(data.system.accounts); // اضافه کردن این خط
+    }
     if (data.proxyService) updateProxyServiceStatus(data.proxyService);
+    if (data.instances) updateInstanceStats(data.instances);
 }
 
+
 function updateSystemStats(system) {
-    updateElement('total-accounts', system.accounts.total || 0);
-    updateElement('processed-accounts', system.accounts.completed || 0);
-    updateElement('pending-count', system.accounts.pending || 0);
-    updateElement('active-proxies', system.proxies.active || 0);
-    updateElement('total-proxies', system.proxies.total || 0);
+    console.log('📊 Updating system stats:', system);
+
+    // آمار کلی
+    updateElement('total-accounts', system.accounts?.total || 0);
+    updateElement('processed-accounts', system.accounts?.completed || 0);
+    updateElement('pending-count', system.accounts?.pending || 0);
+    updateElement('processing-count', system.accounts?.processing || 0);
+
+    // آمار پروکسی
+    updateElement('active-proxies', system.proxies?.active || 0);
+    updateElement('total-proxies', system.proxies?.total || 0);
+
+    // آمار batch ها
+    if (system.batches) {
+        updateElement('total-batches', system.batches.total || 0);
+        updateElement('completed-batches', system.batches.completed || 0);
+    }
+
+    // آمار instance ها
+    if (system.instances) {
+        updateElement('total-instances', system.instances.total || 0);
+        updateElement('active-instances', system.instances.active || 0);
+    }
 }
+
+function updateAccountDetails(accounts) {
+    console.log('📊 Updating account details:', accounts);
+
+    if (!accounts || !accounts.results) {
+        console.warn('⚠️ No account results data');
+        return;
+    }
+
+    const results = accounts.results;
+
+    // آپدیت هر نوع نتیجه
+    updateElement('good-count', results.good || 0);
+    updateElement('invalid-count', results.invalid || 0);
+    updateElement('twofa-count', results['2fa'] || 0);
+    updateElement('passkey-count', results.passkey || 0);
+    updateElement('error-count', results.error || 0);
+    updateElement('lock-count', results.lock || 0);
+    updateElement('guard-count', results.guard || 0);
+    updateElement('change-pass-count', results['change-pass'] || 0);
+    updateElement('mobile-2step-count', results['mobile-2step'] || 0);
+    updateElement('timeout-count', results.timeout || 0);
+    updateElement('server-error-count', results['server-error'] || 0);
+
+    // محاسبه Bad count (جمع همه جز Good)
+    const badCount = (results.invalid || 0) +
+        (results['2fa'] || 0) +
+        (results.passkey || 0) +
+        (results.error || 0) +
+        (results.lock || 0) +
+        (results.guard || 0) +
+        (results['change-pass'] || 0) +
+        (results['mobile-2step'] || 0) +
+        (results.timeout || 0) +
+        (results['server-error'] || 0);
+
+    updateElement('bad-count', badCount);
+
+    console.log('📊 Account details updated:', {
+        good: results.good || 0,
+        bad: badCount,
+        total: accounts.total || 0
+    });
+}
+
+
 
 const mapping = {
     'processing-count': 'processed-accounts', // یا اگر بخوای جدید براش بسازی اینو حذف کن
@@ -153,7 +223,16 @@ const mapping = {
 
 function updateElement(id, value) {
     const el = document.getElementById(id);
-    if (el) el.textContent = value;
+    if (el) {
+        // اگر مقدار تغییر کرده باشد، انیمیشن اعمال کن
+        if (el.textContent !== value.toString()) {
+            el.textContent = value;
+            el.classList.add('value-updated');
+            setTimeout(() => el.classList.remove('value-updated'), 1000);
+        }
+    } else {
+        console.warn(`⚠️ Element with ID '${id}' not found`);
+    }
 }
 
 // Event listeners
