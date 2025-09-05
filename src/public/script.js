@@ -376,42 +376,149 @@ function initializeEventListeners() {
     }
 
     // دکمه به‌روزرسانی پروکسی
-    const updateProxiesBtn = document.getElementById('update-proxies-btn');
-    if (updateProxiesBtn) {
-        updateProxiesBtn.addEventListener('click', async () => {
-            console.log('🔄 Update proxies button clicked');
+    document.getElementById('update-proxies-btn').addEventListener('click', async function () {
+        const btn = this;
+        const originalText = btn.innerHTML;
 
-            updateProxiesBtn.disabled = true;
-            updateProxiesBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> در حال به‌روزرسانی...';
+        try {
+            // غیرفعال کردن دکمه و نمایش loading
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> در حال به‌روزرسانی...';
 
+            console.log('🔄 Starting manual proxy update...');
+
+            // ارسال درخواست به‌روزرسانی
+            const response = await fetch('/api/proxies/update', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                }
+            });
+
+            const result = await response.json();
+
+            if (result.success) {
+                console.log('✅ Proxy update started successfully:', result.data);
+
+                // نمایش پیام موفقیت
+                showNotification('به‌روزرسانی پروکسی‌ها شروع شد', 'success');
+
+                // شروع نظارت بر وضعیت به‌روزرسانی
+                monitorProxyUpdate();
+
+            } else {
+                throw new Error(result.message || 'خطا در شروع به‌روزرسانی');
+            }
+
+        } catch (error) {
+            console.error('❌ Error updating proxies:', error);
+            showNotification(`خطا در به‌روزرسانی: ${error.message}`, 'error');
+
+            // بازگردانی دکمه
+            btn.disabled = false;
+            btn.innerHTML = originalText;
+        }
+    });
+
+    // نظارت بر وضعیت به‌روزرسانی
+    async function monitorProxyUpdate() {
+        const btn = document.getElementById('update-proxies-btn');
+        let checkCount = 0;
+        const maxChecks = 60; // حداکثر 5 دقیقه نظارت
+
+        const checkStatus = async () => {
             try {
-                if (socket && socket.connected) {
-                    socket.emit('update-proxies');
-                } else {
-                    // استفاده از API
-                    const response = await fetch('/api/proxies/update', {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json'
+                checkCount++;
+
+                const response = await fetch('/api/stats');
+                const result = await response.json();
+
+                if (result.success && result.data.system.proxies) {
+                    const proxyStats = result.data.system.proxies;
+
+                    // اگر در حال به‌روزرسانی است
+                    if (proxyStats.serviceIsUpdating) {
+                        console.log(`🔄 Proxy update in progress... (check ${checkCount})`);
+
+                        // به‌روزرسانی متن دکمه
+                        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> در حال دریافت...';
+
+                        // ادامه نظارت
+                        if (checkCount < maxChecks) {
+                            setTimeout(checkStatus, 5000); // هر 5 ثانیه چک کن
+                        } else {
+                            // timeout
+                            btn.disabled = false;
+                            btn.innerHTML = '<i class="fas fa-sync-alt"></i> به‌روزرسانی';
+                            showNotification('زمان انتظار به‌روزرسانی به پایان رسید', 'warning');
                         }
-                    });
 
-                    const result = await response.json();
-
-                    if (result.success) {
-                        showNotification('به‌روزرسانی پروکسی‌ها آغاز شد', 'success');
                     } else {
-                        throw new Error(result.message);
+                        // به‌روزرسانی تمام شده
+                        console.log('✅ Proxy update completed');
+
+                        btn.disabled = false;
+                        btn.innerHTML = '<i class="fas fa-sync-alt"></i> به‌روزرسانی';
+
+                        // به‌روزرسانی آمار در صفحه
+                        updateProxyStatsDisplay(proxyStats);
+
+                        showNotification(`به‌روزرسانی تکمیل شد - ${proxyStats.total} پروکسی`, 'success');
                     }
                 }
+
             } catch (error) {
-                console.error('❌ Error updating proxies:', error);
-                showNotification(`خطا در به‌روزرسانی: ${error.message}`, 'error');
-            } finally {
-                updateProxiesBtn.disabled = false;
-                updateProxiesBtn.innerHTML = '<i class="fas fa-sync-alt"></i> به‌روزرسانی';
+                console.error('❌ Error checking proxy update status:', error);
+
+                // در صورت خطا، دکمه را فعال کن
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-sync-alt"></i> به‌روزرسانی';
+            }
+        };
+
+        // شروع نظارت
+        setTimeout(checkStatus, 2000);
+    }
+
+    // به‌روزرسانی نمایش آمار پروکسی‌ها
+    function updateProxyStatsDisplay(proxyStats) {
+        // به‌روزرسانی عناصر مربوط به پروکسی در صفحه
+        const elements = {
+            'proxy-total': proxyStats.total || 0,
+            'proxy-available': proxyStats.available || 0,
+            'proxy-last-update': proxyStats.serviceLastUpdate ?
+                new Date(proxyStats.serviceLastUpdate).toLocaleString('fa-IR') : 'هرگز',
+            'proxy-next-update': proxyStats.serviceNextUpdate ?
+                new Date(proxyStats.serviceNextUpdate).toLocaleString('fa-IR') : 'نامشخص'
+        };
+
+        Object.entries(elements).forEach(([id, value]) => {
+            const element = document.getElementById(id);
+            if (element) {
+                element.textContent = value;
             }
         });
+
+        console.log('📊 Proxy stats updated in UI:', proxyStats);
+    }
+
+    // تابع نمایش اعلان
+    function showNotification(message, type = 'info') {
+        // اگر کتابخانه notification داری استفاده کن، وگرنه alert ساده
+        if (typeof toastr !== 'undefined') {
+            toastr[type](message);
+        } else if (typeof Swal !== 'undefined') {
+            Swal.fire({
+                text: message,
+                icon: type === 'error' ? 'error' : type === 'success' ? 'success' : 'info',
+                toast: true,
+                position: 'top-end',
+                showConfirmButton: false,
+                timer: 3000
+            });
+        } else {
+            alert(message);
+        }
     }
 
     // Upload functionality
@@ -1194,17 +1301,6 @@ function initializeCharts() {
 }
 
 // document.addEventListener('DOMContentLoaded', initializeUpload);
-
-// Show notification
-function showNotification(message, type = 'info') {
-    console.log(`📢 ${type.toUpperCase()}: ${message}`);
-    const container = document.getElementById('notification-container');
-    const div = document.createElement('div');
-    div.className = `notification ${type}`;
-    div.textContent = message;
-    container.appendChild(div);
-    setTimeout(() => div.remove(), 4000);
-}
 
 // Hide loading overlay when page is ready
 window.addEventListener('load', function () {

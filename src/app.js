@@ -291,17 +291,46 @@ app.get('/api/accounts/stats', async (req, res) => {
 // Proxy Routes
 app.post('/api/proxies/update', async (req, res) => {
     try {
+        console.log('🔧 Manual proxy update requested via API');
+
+        // بررسی اینکه آیا در حال به‌روزرسانی است یا نه
+        const currentStatus = proxyUpdaterService.getStatus();
+
+        if (currentStatus.isUpdating) {
+            return res.status(409).json({
+                success: false,
+                message: 'به‌روزرسانی پروکسی در حال انجام است',
+                data: {
+                    status: 'already_running',
+                    lastUpdate: currentStatus.lastUpdate,
+                    nextUpdate: currentStatus.nextUpdate
+                }
+            });
+        }
+
+        // شروع به‌روزرسانی دستی
         const result = await proxyUpdaterService.manualUpdate();
+
         res.json({
             success: true,
-            message: 'به‌روزرسانی پروکسی‌ها آغاز شد',
-            status: result
+            message: 'به‌روزرسانی پروکسی‌ها شروع شد',
+            data: {
+                status: 'started',
+                timestamp: new Date(),
+                serviceStatus: result
+            }
         });
+
     } catch (error) {
-        console.error('Manual proxy update error:', error);
+        console.error('❌ Error in manual proxy update:', error);
+
         res.status(500).json({
             success: false,
-            message: error.message || 'خطا در به‌روزرسانی پروکسی‌ها'
+            message: error.message || 'خطا در شروع به‌روزرسانی پروکسی‌ها',
+            data: {
+                status: 'error',
+                error: error.message
+            }
         });
     }
 });
