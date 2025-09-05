@@ -4,6 +4,7 @@ const BatchModel = require('../models/knex/Batch'); // اگر وجود داره
 const statsService = require('../services/statsService');
 const proxyService = require('../services/proxyService');
 const accountService = require('../services/accountService');
+const { db } = require('../config/database')
 const os = require('os');
 
 class StatsController {
@@ -107,7 +108,7 @@ class StatsController {
                     .groupBy('result')
                     .whereNotNull('result'),
                 AccountModel.query()
-                    .where('created_at', '>', AccountModel.db().raw("NOW() - INTERVAL '24 hours'"))
+                    .where('created_at', '>', db().raw("NOW() - INTERVAL '24 hours'"))
                     .count('* as count')
                     .first()
             ]);
