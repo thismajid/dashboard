@@ -5,14 +5,192 @@ class ProxyService {
     constructor() {
         console.log('🌐 ProxyService initialized - Single use mode');
 
-        // تنظیم Redis اگر موجود باشه
+        // تنظیم Redis با ioredis
+        this.redis = null;
+        this.serviceInfo = {
+            isRunning: true,
+            lastUpdate: new Date(),
+            nextUpdate: this.calculateNextUpdateTime(),
+            status: 'idle'
+        };
+
+        // اتصال به Redis
+        this.initializeRedis();
+    }
+
+    async initializeRedis() {
         try {
-            const redis = require('../config/redis'); // مسیر Redis config
+            // اتصال به Redis با ioredis
+            const { redis } = require('../config/redis');
             this.redis = redis;
+
+            // تست اتصال
+            await this.redis.ping();
+            console.log('✅ ProxyService Redis connected');
+
         } catch (error) {
-            console.warn('⚠️ Redis not configured, service info will use defaults');
+            console.warn('⚠️ ProxyService Redis initialization failed:', error.message);
             this.redis = null;
         }
+    }
+
+    // محاسبه زمان به‌روزرسانی بعدی
+    calculateNextUpdateTime(currentTime = new Date()) {
+        const now = new Date(currentTime);
+        const minutes = now.getMinutes();
+
+        // پیدا کردن نزدیک‌ترین نیم ساعت بعدی (00 یا 30)
+        let nextMinutes;
+        if (minutes < 30) {
+            nextMinutes = 30;
+        } else {
+            nextMinutes = 60; // یعنی ساعت بعد، دقیقه 0
+        }
+
+        const nextUpdate = new Date(now);
+
+        if (nextMinutes === 60) {
+            nextUpdate.setHours(now.getHours() + 1);
+            nextUpdate.setMinutes(0);
+        } else {
+            nextUpdate.setMinutes(nextMinutes);
+        }
+
+        nextUpdate.setSeconds(0);
+        nextUpdate.setMilliseconds(0);
+
+        return nextUpdate;
+    }
+
+    async getServiceInfo() {
+        try {
+            // اگر Redis موجود باشه
+            if (this.redis) {
+                try {
+                    const serviceInfo = await this.redis.hgetall('proxy:service:info');
+
+                    // اگر اطلاعات موجود باشه
+                    if (serviceInfo && Object.keys(serviceInfo).length > 0) {
+                        let nextUpdate = null;
+                        if (serviceInfo.nextUpdate) {
+                            nextUpdate = new Date(serviceInfo.nextUpdate);
+                            // اگر nextUpdate گذشته، دوباره محاسبه کن
+                            if (nextUpdate < new Date()) {
+                                nextUpdate = this.calculateNextUpdateTime();
+                                await this.updateServiceInfo({ nextUpdate });
+                            }
+                        } else {
+                            nextUpdate = this.calculateNextUpdateTime();
+                            await this.updateServiceInfo({ nextUpdate });
+                        }
+
+                        return {
+                            isRunning: serviceInfo.isRunning === 'true',
+                            lastUpdate: serviceInfo.lastUpdate ? new Date(serviceInfo.lastUpdate) : new Date(),
+                            nextUpdate: nextUpdate,
+                            status: serviceInfo.status || 'idle'
+                        };
+                    }
+                } catch (redisError) {
+                    console.warn('⚠️ Redis hgetall error, falling back to memory:', redisError.message);
+                }
+            }
+
+            // Fallback به حافظه محلی
+            // اگر nextUpdate گذشته، دوباره محاسبه کن
+            if (this.serviceInfo.nextUpdate < new Date()) {
+                this.serviceInfo.nextUpdate = this.calculateNextUpdateTime();
+            }
+
+            return {
+                isRunning: this.serviceInfo.isRunning,
+                lastUpdate: this.serviceInfo.lastUpdate,
+                nextUpdate: this.serviceInfo.nextUpdate,
+                status: this.serviceInfo.status
+            };
+
+        } catch (error) {
+            console.error('❌ Error getting service info:', error);
+            return {
+                isRunning: false,
+                lastUpdate: new Date(),
+                nextUpdate: this.calculateNextUpdateTime(),
+                status: 'error'
+            };
+        }
+    }
+
+    async updateServiceInfo(info) {
+        try {
+            // اگر lastUpdate جدید داده شده، nextUpdate رو هم محاسبه کن
+            if (info.lastUpdate && !info.nextUpdate) {
+                info.nextUpdate = this.calculateNextUpdateTime();
+            }
+
+            // بروزرسانی حافظه محلی
+            this.serviceInfo = {
+                ...this.serviceInfo,
+                ...info
+            };
+
+            // اگر Redis موجود باشه، در آن هم ذخیره کن
+            if (this.redis) {
+                try {
+                    const redisData = {
+                        isRunning: (info.isRunning !== undefined ? info.isRunning : this.serviceInfo.isRunning).toString(),
+                        lastUpdate: info.lastUpdate ? info.lastUpdate.toISOString() :
+                            (this.serviceInfo.lastUpdate ? this.serviceInfo.lastUpdate.toISOString() : new Date().toISOString()),
+                        nextUpdate: info.nextUpdate ? info.nextUpdate.toISOString() :
+                            (this.serviceInfo.nextUpdate ? this.serviceInfo.nextUpdate.toISOString() : this.calculateNextUpdateTime().toISOString()),
+                        status: info.status || this.serviceInfo.status || 'idle'
+                    };
+
+                    await this.redis.hmset('proxy:service:info', redisData);
+                    console.log('📊 Service info saved to Redis:', redisData);
+
+                } catch (redisError) {
+                    console.warn('⚠️ Redis hmset error:', redisError.message);
+                }
+            }
+
+            console.log('📊 Service info updated:', {
+                isRunning: this.serviceInfo.isRunning,
+                lastUpdate: this.serviceInfo.lastUpdate,
+                nextUpdate: this.serviceInfo.nextUpdate,
+                status: this.serviceInfo.status
+            });
+
+        } catch (error) {
+            console.error('❌ Error updating service info:', error);
+        }
+    }
+
+    // متد برای شروع به‌روزرسانی پروکسی‌ها
+    async startProxyUpdate() {
+        const now = new Date();
+        const nextUpdate = this.calculateNextUpdateTime(now);
+
+        console.log('🚀 Starting proxy update...');
+        await this.updateServiceInfo({
+            isRunning: true,
+            lastUpdate: now,
+            nextUpdate: nextUpdate,
+            status: 'updating'
+        });
+    }
+
+    // متد برای پایان به‌روزرسانی
+    async finishProxyUpdate(success = true) {
+        const now = new Date();
+        const nextUpdate = this.calculateNextUpdateTime(now);
+
+        console.log(`✅ Proxy update finished: ${success ? 'SUCCESS' : 'FAILED'}`);
+        await this.updateServiceInfo({
+            isRunning: true,
+            lastUpdate: now,
+            nextUpdate: nextUpdate,
+            status: success ? 'success' : 'error'
+        });
     }
 
     /**
@@ -66,9 +244,6 @@ class ProxyService {
 
             console.log(`📊 Proxy Report [${proxyId}] by ${instanceId}: ${status} (${responseTime}ms)${errorMsg}`);
 
-            // اختیاری: ذخیره آمار در دیتابیس یا Redis
-            // این بخش رو می‌تونی برای آمارگیری اضافه کنی
-
             return true;
         } catch (err) {
             console.error('❌ خطا در گزارش وضعیت پروکسی:', err);
@@ -83,7 +258,6 @@ class ProxyService {
         try {
             console.log(`🔄 Checking for stuck proxies (timeout: ${timeoutMinutes}min)`);
 
-            // پاکسازی پروکسی‌های قدیمی
             const cleanedCount = await this.cleanupOldProxies(24);
 
             console.log(`🧹 Cleaned up ${cleanedCount} old proxies`);
@@ -154,7 +328,7 @@ class ProxyService {
             const cutoffTime = new Date(Date.now() - (olderThanHours * 60 * 60 * 1000));
 
             const deletedCount = await ProxyModel.deleteMany({
-                created_at: cutoffTime // کمتر از زمان مشخص شده
+                created_at: cutoffTime
             });
 
             if (deletedCount > 0) {
@@ -170,129 +344,15 @@ class ProxyService {
     }
 
     /**
-    * تست یک پروکسی
-    */
-    async testSingleProxy(proxyString) {
-        return new Promise((resolve) => {
-            const startTime = Date.now();
-
-            try {
-                // پارس پروکسی
-                const [hostPort, auth] = proxyString.includes('@') ?
-                    proxyString.split('@').reverse() : [proxyString, null];
-
-                const [host, port] = hostPort.split(':');
-                const [username, password] = auth ? auth.split(':') : [null, null];
-
-                if (!host || !port) {
-                    return resolve({
-                        success: false,
-                        error: 'فرمت پروکسی نامعتبر',
-                        responseTime: null
-                    });
-                }
-
-                // تست پروکسی
-                const http = require('http');
-                const options = {
-                    hostname: host,
-                    port: parseInt(port),
-                    path: 'https://my.account.sony.com',
-                    method: 'GET',
-                    timeout: 5000,
-                    headers: {
-                        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-                    }
-                };
-
-                if (username && password) {
-                    const auth = Buffer.from(`${username}:${password}`).toString('base64');
-                    options.headers['Proxy-Authorization'] = `Basic ${auth}`;
-                }
-
-                const request = http.request(options, (response) => {
-                    const responseTime = Date.now() - startTime;
-
-                    resolve({
-                        success: response.statusCode < 400,
-                        responseTime,
-                        statusCode: response.statusCode,
-                        host,
-                        port: parseInt(port)
-                    });
-                });
-
-                request.on('error', (error) => {
-                    resolve({
-                        success: false,
-                        error: error.message,
-                        responseTime: Date.now() - startTime,
-                        host,
-                        port: parseInt(port)
-                    });
-                });
-
-                request.on('timeout', () => {
-                    request.destroy();
-                    resolve({
-                        success: false,
-                        error: 'Timeout',
-                        responseTime: Date.now() - startTime,
-                        host,
-                        port: parseInt(port)
-                    });
-                });
-
-                request.end();
-
-            } catch (error) {
-                resolve({
-                    success: false,
-                    error: error.message,
-                    responseTime: Date.now() - startTime
-                });
-            }
-        });
-    }
-
-    /**
-    * دریافت پروکسی بعدی (بدون حذف)
-    */
-    async getNextProxy() {
-        try {
-            const proxy = await ProxyModel.query()
-                .where('status', 'active')
-                .orderBy('created_at', 'asc')
-                .first();
-
-            if (!proxy) {
-                return null;
-            }
-
-            return {
-                id: proxy.id.toString(),
-                host: proxy.host,
-                port: proxy.port,
-                username: proxy.username,
-                password: proxy.password,
-                protocol: proxy.protocol || 'http',
-                responseTime: proxy.responseTime || 0,
-                url: this.buildProxyUrl(proxy)
-            };
-
-        } catch (error) {
-            console.error('❌ Error getting next proxy:', error);
-            return null;
-        }
-    }
-
-    /**
     * بروزرسانی پروکسی‌ها (جایگزینی کل لیست) با تراکنش
     */
     async updateProxies(newProxies) {
         const trx = await db().transaction();
 
         try {
+            // شروع به‌روزرسانی
+            await this.startProxyUpdate();
+
             const proxyModel = ProxyModel.withTransaction(trx);
 
             if (newProxies && newProxies.length > 0) {
@@ -317,11 +377,19 @@ class ProxyService {
 
             await trx.commit();
             console.log(`✅ ${newProxies?.length || 0} پروکسی بروزرسانی شد`);
+
+            // پایان موفق به‌روزرسانی
+            await this.finishProxyUpdate(true);
+
             return newProxies?.length || 0;
 
         } catch (error) {
             await trx.rollback();
             console.error('❌ خطا در بروزرسانی پروکسی‌ها:', error);
+
+            // پایان ناموفق به‌روزرسانی
+            await this.finishProxyUpdate(false);
+
             throw error;
         }
     }
@@ -334,123 +402,45 @@ class ProxyService {
         return true;
     }
 
-    async getServiceInfo() {
-        try {
-            // اگر Redis نداری، از متغیرهای محلی یا فایل استفاده کن
-            if (!this.redis) {
-                console.warn('⚠️ Redis not available, using default service info');
-
-                // محاسبه زمان به‌روزرسانی بعدی (هر نیم ساعت)
-                const now = new Date();
-                const nextUpdate = this.calculateNextUpdateTime(now);
-
-                return {
-                    isRunning: true,
-                    lastUpdate: new Date(),
-                    nextUpdate: nextUpdate,
-                    status: 'idle'
-                };
-            }
-
-            // اگر از Redis استفاده می‌کنی
-            const serviceInfo = await this.redis.hgetall('proxy:service:info');
-
-            // اگر nextUpdate موجود نیست، محاسبه کن
-            let nextUpdate = null;
-            if (serviceInfo.nextUpdate) {
-                nextUpdate = new Date(serviceInfo.nextUpdate);
-            } else {
-                nextUpdate = this.calculateNextUpdateTime(new Date());
-                // ذخیره در Redis
-                await this.updateServiceInfo({ nextUpdate });
-            }
-
-            return {
-                isRunning: serviceInfo.isRunning === 'true',
-                lastUpdate: serviceInfo.lastUpdate ? new Date(serviceInfo.lastUpdate) : null,
-                nextUpdate: nextUpdate,
-                status: serviceInfo.status || 'idle'
-            };
-        } catch (error) {
-            console.error('❌ Error getting service info:', error);
-            return {
-                isRunning: false,
-                lastUpdate: null,
-                nextUpdate: this.calculateNextUpdateTime(new Date()), // حداقل زمان بعدی رو بده
-                status: 'error'
-            };
-        }
-    }
-
-    // متد جدید برای محاسبه زمان به‌روزرسانی بعدی
-    calculateNextUpdateTime(currentTime = new Date()) {
-        const now = new Date(currentTime);
-        const minutes = now.getMinutes();
-        const seconds = now.getSeconds();
-
-        // پیدا کردن نزدیک‌ترین نیم ساعت بعدی (00 یا 30)
-        let nextMinutes;
-        if (minutes < 30) {
-            nextMinutes = 30;
-        } else {
-            nextMinutes = 60; // یعنی ساعت بعد، دقیقه 0
-        }
-
-        const nextUpdate = new Date(now);
-
-        if (nextMinutes === 60) {
-            nextUpdate.setHours(now.getHours() + 1);
-            nextUpdate.setMinutes(0);
-        } else {
-            nextUpdate.setMinutes(nextMinutes);
-        }
-
-        nextUpdate.setSeconds(0);
-        nextUpdate.setMilliseconds(0);
-
-        return nextUpdate;
-    }
-
-    async startProxyUpdate() {
-        const now = new Date();
-        const nextUpdate = this.calculateNextUpdateTime(now);
-
-        await this.updateServiceInfo({
-            isRunning: true,
-            lastUpdate: now,
-            nextUpdate: nextUpdate,
-            status: 'updating'
-        });
-    }
-
-    // متد برای پایان به‌روزرسانی
-    async finishProxyUpdate(success = true) {
-        const now = new Date();
-        const nextUpdate = this.calculateNextUpdateTime(now);
-
-        await this.updateServiceInfo({
-            isRunning: true,
-            lastUpdate: now,
-            nextUpdate: nextUpdate,
-            status: success ? 'success' : 'error'
-        });
-    }
-
-    async updateServiceInfo(info) {
+    /**
+    * تست اتصال Redis
+    */
+    async testRedisConnection() {
         try {
             if (!this.redis) {
-                console.warn('⚠️ Redis not available, service info not saved');
-                return;
+                return { connected: false, error: 'Redis not initialized' };
             }
 
-            await this.redis.hmset('proxy:service:info', {
-                isRunning: info.isRunning.toString(),
-                lastUpdate: info.lastUpdate ? info.lastUpdate.toISOString() : '',
-                nextUpdate: info.nextUpdate ? info.nextUpdate.toISOString() : '',
-                status: info.status || 'idle'
-            });
+            await this.redis.ping();
+            return { connected: true };
         } catch (error) {
-            console.error('❌ Error updating service info:', error);
+            return { connected: false, error: error.message };
+        }
+    }
+
+    /**
+    * دریافت اطلاعات کامل سرویس برای تست
+    */
+    async getFullServiceStatus() {
+        try {
+            const serviceInfo = await this.getServiceInfo();
+            const redisStatus = await this.testRedisConnection();
+            const proxyStats = await this.getProxyStats();
+
+            return {
+                service: serviceInfo,
+                redis: redisStatus,
+                proxies: proxyStats,
+                timestamp: new Date()
+            };
+        } catch (error) {
+            console.error('❌ Error getting full service status:', error);
+            return {
+                service: { isRunning: false, status: 'error' },
+                redis: { connected: false, error: error.message },
+                proxies: { total: 0 },
+                timestamp: new Date()
+            };
         }
     }
 }
