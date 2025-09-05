@@ -265,7 +265,7 @@ class StatsController {
                         .count('* as count')
                         .groupBy('status'),
                     AccountModel.db()('Batches')
-                        .where('created_at', '>', AccountModel.db().raw("NOW() - INTERVAL '24 hours'"))
+                        .where('created_at', '>', db().raw("NOW() - INTERVAL '24 hours'"))
                         .count('* as count')
                         .first(),
                     AccountModel.db()('Batches')
@@ -299,7 +299,7 @@ class StatsController {
                     AccountModel.query()
                         .countDistinct('batchId as count')
                         .whereNotNull('batchId')
-                        .where('created_at', '>', AccountModel.db().raw("NOW() - INTERVAL '24 hours'"))
+                        .where('created_at', '>', db().raw("NOW() - INTERVAL '24 hours'"))
                         .first()
                 ]);
 
