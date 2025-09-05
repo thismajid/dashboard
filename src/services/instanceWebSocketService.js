@@ -374,7 +374,6 @@ class InstanceWebSocketService {
             instanceData.currentBatch = {
                 accounts: accounts.length,
                 batchId: workPackage.batchId,
-                startedAt: Date.now(),
                 proxyId: proxy.id,
                 accountIds: accounts.map(a => a.id)
             };

@@ -128,7 +128,6 @@ class AccountService {
                 .where('status', 'queued')
                 .update({
                     status: 'processing',
-                    startedAt: new Date(),
                     updated_at: new Date()
                 });
 
