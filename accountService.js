@@ -65,7 +65,6 @@ class AccountService {
                 batchId: batchInfo.batchId,
                 originalIndex: index,
                 status: 'pending',
-                processingAttempts: 0,
                 metadata: JSON.stringify({
                     originalData: account,
                     lineNumber: account.lineNumber || index + 1
@@ -142,7 +141,6 @@ class AccountService {
                 password: acc.password,
                 batchId: acc.batchId,
                 originalIndex: acc.originalIndex,
-                attempts: acc.processingAttempts + 1
             }));
 
         } catch (error) {
