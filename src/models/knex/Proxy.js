@@ -1,4 +1,5 @@
 const BaseModel = require('./BaseModel');
+const { db } = require('../../config/database')
 
 class ProxyModel extends BaseModel {
     constructor() {
@@ -44,7 +45,7 @@ class ProxyModel extends BaseModel {
 
     // پیدا کردن و حذف پروکسی در یک عملیات اتمیک
     async findOneAndDelete(conditions, options = {}) {
-        const trx = await this.db().transaction();
+        const trx = await db().transaction();
 
         try {
             let query = trx(this.tableName);
