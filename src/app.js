@@ -658,12 +658,9 @@ app.post('/api/proxies/new/update', authenticateAPI, async (req, res) => {
             status: 'active',
             responseTime: proxyData.responseTime || 0,
             lastTestAt: new Date(proxyData.testedAt || Date.now()),
-            usageCount: 0,
-            successCount: 1,
-            failureCount: 0,
             source: proxyData.source || 'tester-server',
-            createdAt: new Date(),
-            updatedAt: new Date()
+            created_at: new Date(),
+            updated_at: new Date()
         }));
 
         // درج پروکسی‌های جدید
@@ -1010,6 +1007,7 @@ process.on('unhandledRejection', (reason, promise) => {
 
 
 module.exports = { app, server, instanceWS, dashboardIO };
+
 
 
 
