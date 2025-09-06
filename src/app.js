@@ -633,6 +633,8 @@ const authenticateAPI = (req, res, next) => {
 };
 
 app.post('/api/proxies/new/update', authenticateAPI, async (req, res) => {
+    const trx = await db().transaction();
+
     try {
         const { proxies, metadata } = req.body;
 
@@ -645,8 +647,6 @@ app.post('/api/proxies/new/update', authenticateAPI, async (req, res) => {
 
         console.log(`📥 Received ${proxies.length} proxies from tester server`);
         console.log(`📊 Metadata:`, metadata);
-
-        const trx = await db().transaction();
 
         // آماده‌سازی داده‌های جدید
         const newProxies = proxies.map(proxyData => ({
@@ -674,12 +674,13 @@ app.post('/api/proxies/new/update', authenticateAPI, async (req, res) => {
             deletedCount = await trx('Proxies').del();
             console.log(`🗑️ Deleted ${deletedCount} existing proxies`);
 
-            await trx('Proxies').insert(chunk);
+            await trx('Proxies').insert(newProxies);
             
-            const savedProxies = await Proxy.insertMany(newProxies);
             savedCount = savedProxies.length;
             console.log(`✅ Inserted ${savedCount} new proxies`);
         }
+
+        await trx.commit()
 
         // آمار نهایی
         const stats = {
@@ -702,6 +703,7 @@ app.post('/api/proxies/new/update', authenticateAPI, async (req, res) => {
 
     } catch (error) {
         console.error('❌ Error updating proxies:', error);
+        if(trx) await trx.rollback();
         res.status(500).json({
             error: 'Internal server error',
             message: error.message,
@@ -1008,6 +1010,7 @@ process.on('unhandledRejection', (reason, promise) => {
 
 
 module.exports = { app, server, instanceWS, dashboardIO };
+
 
 
 
