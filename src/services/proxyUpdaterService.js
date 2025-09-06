@@ -42,21 +42,21 @@ class ProxyUpdaterService extends EventEmitter {
         console.log('🚀 Starting ProxyUpdaterService...');
 
         // شروع فوری
-        this.triggerUpdate();
+       // this.triggerUpdate();
 
         // تنظیم cron job برای اجرا در دقیقه 0 و 30 هر ساعت
         // '0,30 * * * *' = دقیقه 0 و 30 از هر ساعت
-        this.cronJob = cron.schedule('0,15 * * * *', () => {
-            const now = new Date();
-            console.log(`⏰ Scheduled proxy update triggered at: ${now.toLocaleString('fa-IR')}`);
-            this.triggerUpdate();
-        }, {
-            scheduled: true,
-            timezone: "Asia/Tehran" // تنظیم منطقه زمانی ایران
-        });
+        // this.cronJob = cron.schedule('0,15 * * * *', () => {
+        //     const now = new Date();
+        //     console.log(`⏰ Scheduled proxy update triggered at: ${now.toLocaleString('fa-IR')}`);
+        //     this.triggerUpdate();
+        // }, {
+        //     scheduled: true,
+        //     timezone: "Asia/Tehran" // تنظیم منطقه زمانی ایران
+        // });
 
         // محاسبه زمان آپدیت بعدی
-        this.calculateNextUpdate();
+        // this.calculateNextUpdate();
 
         console.log(`✅ ProxyUpdaterService started - Updates scheduled for :00 and :30 of every hour`);
         console.log(`📅 Next update: ${this.stats.nextUpdate?.toLocaleString('fa-IR')}`);
@@ -351,4 +351,5 @@ class ProxyUpdaterService extends EventEmitter {
 }
 
 module.exports = new ProxyUpdaterService();
+
 
