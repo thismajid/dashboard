@@ -28,29 +28,29 @@ class ProxyUpdaterService extends EventEmitter {
     }
 
     start() {
-        if (this.isRunning) {
-            console.log('⚠️ ProxyUpdaterService is already running');
-            return;
-        }
+        // if (this.isRunning) {
+        //     console.log('⚠️ ProxyUpdaterService is already running');
+        //     return;
+        // }
 
-        this.isRunning = true;
-        console.log('🚀 Starting ProxyUpdaterService...');
+        // this.isRunning = true;
+        // console.log('🚀 Starting ProxyUpdaterService...');
 
-        // تنظیم cron job برای اجرا در دقیقه 0 و 30 هر ساعت
-        this.cronJob = cron.schedule('0,30 * * * *', () => {
-            const now = new Date();
-            console.log(`⏰ Scheduled proxy update triggered at: ${now.toLocaleString('fa-IR')}`);
-            this.triggerUpdate();
-        }, {
-            scheduled: true,
-            timezone: "Asia/Tehran"
-        });
+        // // تنظیم cron job برای اجرا در دقیقه 0 و 30 هر ساعت
+        // this.cronJob = cron.schedule('0,30 * * * *', () => {
+        //     const now = new Date();
+        //     console.log(`⏰ Scheduled proxy update triggered at: ${now.toLocaleString('fa-IR')}`);
+        //     this.triggerUpdate();
+        // }, {
+        //     scheduled: true,
+        //     timezone: "Asia/Tehran"
+        // });
 
-        // محاسبه زمان آپدیت بعدی
-        this.calculateNextUpdate();
+        // // محاسبه زمان آپدیت بعدی
+        // this.calculateNextUpdate();
 
-        console.log(`✅ ProxyUpdaterService started`);
-        console.log(`📅 Next update: ${this.stats.nextUpdate?.toLocaleString('fa-IR')}`);
+        // console.log(`✅ ProxyUpdaterService started`);
+        // console.log(`📅 Next update: ${this.stats.nextUpdate?.toLocaleString('fa-IR')}`);
 
         // لود آمار فعلی
         this.loadCurrentStats();
@@ -303,5 +303,6 @@ class ProxyUpdaterService extends EventEmitter {
         return this.getStatus();
     }
 }
+
 
 module.exports = new ProxyUpdaterService();
