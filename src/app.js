@@ -7,6 +7,7 @@ const compression = require('compression');
 const morgan = require('morgan');
 const path = require('path');
 const fs = require('fs');
+const { db } = require('./config/database');
 require('dotenv').config();
 
 // Import database and Redis
@@ -69,9 +70,9 @@ async function initializeServices() {
             console.log('📡 Checking current proxy count before startup fetch...');
             const proxyStats = await proxyService.getProxyStats();
             const currentCount = proxyStats.total || 0;
-            
+
             console.log(`📊 Current proxy count: ${currentCount}`);
-            
+
             if (currentCount === 0) {
                 console.log('🌐 No proxies found - performing initial fetch on startup...');
                 await proxyUpdaterService.manualUpdate();
@@ -646,9 +647,7 @@ app.post('/api/proxies/new/update', authenticateAPI, async (req, res) => {
         console.log(`📥 Received ${proxies.length} proxies from tester server`);
         console.log(`📊 Metadata:`, metadata);
 
-        // پاک کردن پروکسی‌های قدیمی
-        const deleteResult = await Proxy.deleteMany({});
-        console.log(`🗑️ Deleted ${deleteResult.deletedCount} old proxies`);
+        const trx = await db().transaction();
 
         // آماده‌سازی داده‌های جدید
         const newProxies = proxies.map(proxyData => ({
@@ -658,7 +657,7 @@ app.post('/api/proxies/new/update', authenticateAPI, async (req, res) => {
             password: proxyData.password || null,
             protocol: proxyData.protocol || 'http',
             status: 'active',
-            responseTime: proxyData.responseTime || null,
+            responseTime: proxyData.responseTime || 0,
             lastTestAt: new Date(proxyData.testedAt || Date.now()),
             usageCount: 0,
             successCount: 1,
@@ -671,6 +670,12 @@ app.post('/api/proxies/new/update', authenticateAPI, async (req, res) => {
         // درج پروکسی‌های جدید
         let savedCount = 0;
         if (newProxies.length > 0) {
+            // پاک کردن پروکسی‌های قدیمی
+            const deletedCount = await trx('Proxies').del();
+            console.log(`🗑️ Deleted ${deletedCount} existing proxies`);
+
+            await trx('Proxies').insert(chunk);
+            
             const savedProxies = await Proxy.insertMany(newProxies);
             savedCount = savedProxies.length;
             console.log(`✅ Inserted ${savedCount} new proxies`);
@@ -1003,3 +1008,4 @@ process.on('unhandledRejection', (reason, promise) => {
 
 
 module.exports = { app, server, instanceWS, dashboardIO };
+
