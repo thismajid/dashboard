@@ -7,7 +7,6 @@ const compression = require('compression');
 const morgan = require('morgan');
 const path = require('path');
 const fs = require('fs');
-const { db } = require('./config/database');
 require('dotenv').config();
 
 // Import database and Redis
@@ -1008,4 +1007,5 @@ process.on('unhandledRejection', (reason, promise) => {
 
 
 module.exports = { app, server, instanceWS, dashboardIO };
+
 
