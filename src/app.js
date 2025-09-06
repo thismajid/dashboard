@@ -672,7 +672,7 @@ app.post('/api/proxies/new/update', authenticateAPI, async (req, res) => {
 
             await trx('Proxies').insert(newProxies);
             
-            savedCount = savedProxies.length;
+            savedCount = newProxies.length;
             console.log(`✅ Inserted ${savedCount} new proxies`);
         }
 
@@ -1006,6 +1006,7 @@ process.on('unhandledRejection', (reason, promise) => {
 
 
 module.exports = { app, server, instanceWS, dashboardIO };
+
 
 
 
