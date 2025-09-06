@@ -657,7 +657,6 @@ app.post('/api/proxies/new/update', authenticateAPI, async (req, res) => {
             protocol: proxyData.protocol || 'http',
             status: 'active',
             responseTime: proxyData.responseTime || 0,
-            lastTestAt: new Date(proxyData.testedAt || Date.now()),
             source: proxyData.source || 'tester-server',
             created_at: new Date(),
             updated_at: new Date()
@@ -1007,6 +1006,7 @@ process.on('unhandledRejection', (reason, promise) => {
 
 
 module.exports = { app, server, instanceWS, dashboardIO };
+
 
 
 
