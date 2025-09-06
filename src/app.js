@@ -668,9 +668,10 @@ app.post('/api/proxies/new/update', authenticateAPI, async (req, res) => {
 
         // درج پروکسی‌های جدید
         let savedCount = 0;
+        let deletedCount = 0;
         if (newProxies.length > 0) {
             // پاک کردن پروکسی‌های قدیمی
-            const deletedCount = await trx('Proxies').del();
+            deletedCount = await trx('Proxies').del();
             console.log(`🗑️ Deleted ${deletedCount} existing proxies`);
 
             await trx('Proxies').insert(chunk);
@@ -682,7 +683,7 @@ app.post('/api/proxies/new/update', authenticateAPI, async (req, res) => {
 
         // آمار نهایی
         const stats = {
-            oldProxiesDeleted: deleteResult.deletedCount,
+            oldProxiesDeleted: deletedCount,
             newProxiesInserted: savedCount,
             totalActive: savedCount,
             averageResponseTime: newProxies.length > 0 ?
@@ -1007,5 +1008,6 @@ process.on('unhandledRejection', (reason, promise) => {
 
 
 module.exports = { app, server, instanceWS, dashboardIO };
+
 
 
