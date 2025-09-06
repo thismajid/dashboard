@@ -190,14 +190,20 @@ class AccountService {
                 // نرمال‌سازی نتیجه
                 const normalizedResult = this.normalizeResult(result.status);
 
-                console.log(`📝 Updating account ${account.id}: ${result.status} -> ${normalizedResult}`);
-
-                // به‌روزرسانی اکانت
-                await accountModel.findByIdAndUpdate(+account.id, {
-                    status: 'completed',
-                    result: normalizedResult,
-                    updated_at: new Date()
-                });
+                if (['server-error', 'unknown'].includes(normalizedResult)) {
+                    await accountModel.findByIdAndUpdate(+account.id, {
+                        status: 'pending',
+                        result: 'pending',
+                        updated_at: new Date()
+                    });
+                } else {
+                    // به‌روزرسانی اکانت
+                    await accountModel.findByIdAndUpdate(+account.id, {
+                        status: 'completed',
+                        result: normalizedResult,
+                        updated_at: new Date()
+                    });
+                }
 
                 // آماده‌سازی آپدیت batch
                 if (account.batchId) {
@@ -303,42 +309,17 @@ class AccountService {
         // نقشه‌برداری نتایج مختلف
         const resultMap = {
             'good': 'good',
-            'success': 'good',
-            'valid': 'good',
-            'ok': 'good',
-
-            'bad': 'bad',
-            'failed': 'bad',
-            'fail': 'bad',
-            'wrong': 'bad',
-            'lock': 'bad',
-            'locked': 'bad',
-            'guard': 'bad',
-            'change-pass': 'bad',
-            'change_pass': 'bad',
-
-            'invalid': 'invalid',
-            'not_valid': 'invalid',
-            'notvalid': 'invalid',
-
+            'lock': 'lock',
+            'guard': 'guard',
             '2fa': '2fa',
-            'two_factor': '2fa',
-            'twofactor': '2fa',
-            'two-factor': '2fa',
-            'mobile-2step': '2fa',
-            'mobile_2step': '2fa',
-
             'passkey': 'passkey',
-            'pass_key': 'passkey',
-            'security_key': 'passkey',
-
-            'error': 'error',
-            'timeout': 'error',
-            'server_error': 'error',
-            'connection_error': 'error'
+            'change-pass': 'change-pass',
+            'mobile-2step': 'mobile-2step',
+            'unknown': 'unknown',
+            'server-error': 'server-error',
         };
 
-        return resultMap[statusLower] || 'error';
+        return resultMap[statusLower] || 'unknown';
     }
 
     /**
