@@ -7,6 +7,7 @@ const compression = require('compression');
 const morgan = require('morgan');
 const path = require('path');
 const fs = require('fs');
+const Proxy = require('./models/knex/Proxy'); 
 require('dotenv').config();
 
 // Import services and controllers
@@ -384,6 +385,153 @@ app.get('/api/stats/test', async (req, res) => {
     }
 });
 
+const authenticateAPI = (req, res, next) => {
+    const apiKey = req.headers.authorization?.replace('Bearer ', '');
+    const validApiKey = process.env.BACKEND_API_KEY || 'default-key';
+
+    if (apiKey !== validApiKey) {
+        return res.status(401).json({
+            error: 'Unauthorized',
+            message: 'Invalid API key'
+        });
+    }
+
+    next();
+};
+
+app.post('/api/proxies/new/update', authenticateAPI, async (req, res) => {
+    try {
+        const { proxies, metadata } = req.body;
+
+        if (!proxies || !Array.isArray(proxies)) {
+            return res.status(400).json({
+                error: 'Invalid data',
+                message: 'Proxies array is required'
+            });
+        }
+
+        console.log(`📥 Received ${proxies.length} proxies from tester server`);
+        console.log(`📊 Metadata:`, metadata);
+
+        // پاک کردن پروکسی‌های قدیمی
+        const deleteResult = await Proxy.deleteMany({});
+        console.log(`🗑️ Deleted ${deleteResult.deletedCount} old proxies`);
+
+        // آماده‌سازی داده‌های جدید
+        const newProxies = proxies.map(proxyData => ({
+            host: proxyData.host,
+            port: parseInt(proxyData.port),
+            username: proxyData.username || null,
+            password: proxyData.password || null,
+            protocol: proxyData.protocol || 'http',
+            status: 'active',
+            responseTime: proxyData.responseTime || null,
+            lastTestAt: new Date(proxyData.testedAt || Date.now()),
+            usageCount: 0,
+            successCount: 1,
+            failureCount: 0,
+            source: proxyData.source || 'tester-server',
+            createdAt: new Date(),
+            updatedAt: new Date()
+        }));
+
+        // درج پروکسی‌های جدید
+        let savedCount = 0;
+        if (newProxies.length > 0) {
+            const savedProxies = await Proxy.insertMany(newProxies);
+            savedCount = savedProxies.length;
+            console.log(`✅ Inserted ${savedCount} new proxies`);
+        }
+
+        // آمار نهایی
+        const stats = {
+            oldProxiesDeleted: deleteResult.deletedCount,
+            newProxiesInserted: savedCount,
+            totalActive: savedCount,
+            averageResponseTime: newProxies.length > 0 ?
+                Math.round(newProxies.reduce((sum, p) => sum + (p.responseTime || 0), 0) / newProxies.length) : 0,
+            metadata: metadata,
+            updatedAt: new Date().toISOString()
+        };
+
+        console.log(`📊 Proxy update completed:`, stats);
+
+        res.json({
+            success: true,
+            message: `Successfully updated ${savedCount} proxies`,
+            stats: stats
+        });
+
+    } catch (error) {
+        console.error('❌ Error updating proxies:', error);
+        res.status(500).json({
+            error: 'Internal server error',
+            message: error.message,
+            timestamp: new Date().toISOString()
+        });
+    }
+});
+
+// دریافت آمار پروکسی‌ها
+app.get('/api/proxies/new/stats', async (req, res) => {
+    try {
+        const [
+            totalProxies,
+            avgResponseTime
+        ] = await Promise.all([
+            Proxy.countDocuments({ status: 'active' }),
+            Proxy.aggregate([
+                {
+                    $match: {
+                        status: 'active',
+                        responseTime: { $ne: null, $gt: 0 }
+                    }
+                },
+                {
+                    $group: {
+                        _id: null,
+                        avg: { $avg: '$responseTime' }
+                    }
+                }
+            ])
+        ]);
+
+        const stats = {
+            total: totalProxies,
+            available: totalProxies,
+            avgResponseTime: avgResponseTime.length > 0 ?
+                Math.round(avgResponseTime[0].avg) : 0
+        };
+
+        res.json(stats);
+
+    } catch (error) {
+        console.error('❌ Error getting proxy stats:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// دریافت لیست پروکسی‌ها
+app.get('/api/proxies/new/list', async (req, res) => {
+    try {
+        const limit = parseInt(req.query.limit) || 100;
+        const proxies = await Proxy.find({ status: 'active' })
+            .select('host port protocol responseTime createdAt usageCount')
+            .sort({ responseTime: 1, createdAt: 1 })
+            .limit(limit);
+
+        res.json({
+            count: proxies.length,
+            proxies: proxies
+        });
+
+    } catch (error) {
+        console.error('❌ Error getting proxy list:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+
 function getActionText(action) {
     const actionTexts = {
         'start': 'شروع',
@@ -712,5 +860,6 @@ process.on('unhandledRejection', (reason, promise) => {
     console.error('Reason:', reason);
     process.exit(1);
 });
+
 
 module.exports = { app, server, instanceWS, dashboardIO };
